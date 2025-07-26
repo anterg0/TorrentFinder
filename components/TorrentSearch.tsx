@@ -5,7 +5,7 @@ import { Input } from './ui/input'
 import { Button } from './ui/button'
 import { motion, AnimatePresence } from 'motion/react'
 import { TorrentResultCard } from './TorrentResultCard'
-import { TorrentResult, placeholderResults } from '../data/mockTorrents'
+import { TorrentResult } from '../utils/torrentUtils'
 import axios from 'axios'
 
 export type SortOption = 'name' | 'size' | 'date'
@@ -81,7 +81,7 @@ export function TorrentSearch() {
   const [results, setResults] = useState<TorrentResult[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [sortBy, setSortBy] = useState<SortOption>('name')
-  const [showPlaceholders, setShowPlaceholders] = useState(true)
+  const [showPlaceholders, setShowPlaceholders] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -93,7 +93,7 @@ export function TorrentSearch() {
         handleSearch()
       } else if (hasSearched) {
         setResults([])
-        setShowPlaceholders(true)
+        setShowPlaceholders(false)
         setError(null)
       }
     }, 1000) // Increased delay for scraping
@@ -144,9 +144,9 @@ export function TorrentSearch() {
     }
   }
 
-  const displayResults = showPlaceholders ? placeholderResults : results
+  const displayResults = results
   const sortedResults = sortResults(displayResults, sortBy)
-  const showResults = isFocused || hasSearched || showPlaceholders
+  const showResults = hasSearched
 
   return (
     <div className="min-h-screen bg-background overflow-hidden">
@@ -213,7 +213,7 @@ export function TorrentSearch() {
             className="fixed bottom-0 left-0 right-0 h-[60vh] bg-background"
           >
             {/* Sort Options */}
-            {(results.length > 0 || showPlaceholders) && !isLoading && !error && (
+            {results.length > 0 && !isLoading && !error && (
               <motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -255,7 +255,7 @@ export function TorrentSearch() {
                         <p className="text-muted-foreground">Searching RuTracker...</p>
                         <p className="text-xs text-muted-foreground mt-2">This may take up to 30 seconds</p>
                       </motion.div>
-                    ) : error && !showPlaceholders ? (
+                    ) : error ? (
                       <motion.div
                         key="error"
                         initial={{ opacity: 0 }}
@@ -287,11 +287,11 @@ export function TorrentSearch() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.03 }}
                           >
-                            <TorrentResultCard result={result} isPlaceholder={showPlaceholders} />
+                            <TorrentResultCard result={result} isPlaceholder={false} />
                           </motion.div>
                         ))}
                       </motion.div>
-                    ) : searchQuery && !isLoading && !showPlaceholders && !error ? (
+                    ) : searchQuery && !isLoading && !error ? (
                       <motion.div
                         key="no-results"
                         initial={{ opacity: 0 }}

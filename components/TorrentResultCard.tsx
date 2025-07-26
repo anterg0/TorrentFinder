@@ -2,7 +2,7 @@ import { Download, Magnet, HardDrive, Clock } from 'lucide-react'
 import { Button } from './ui/button'
 import { Badge } from './ui/badge'
 import { Card } from './ui/card'
-import { TorrentResult } from '../data/mockTorrents'
+import { TorrentResult } from '../utils/torrentUtils'
 
 interface TorrentResultCardProps {
   result: TorrentResult & { 

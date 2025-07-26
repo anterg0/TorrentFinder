@@ -1,2 +1,10 @@
-// This file can be removed as the functions have been moved to the main component
-// for better organization and to avoid import issues
+export interface TorrentResult {
+  id: string
+  name: string
+  size: string
+  uploadDate: string
+  category: string
+  tracker: string
+  magnetLink?: string
+  url?: string
+}

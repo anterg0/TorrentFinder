@@ -89,10 +89,7 @@ function extractRealRuTrackerUrl(url) {
 
 // Function to scrape individual RuTracker page
 async function scrapeRuTrackerPage(url) {
-  // Гарантируем валидный URL
   url = extractRealRuTrackerUrl(url);
-  // Небольшая задержка между запросами
-  await new Promise(r => setTimeout(r, 2000));
   console.log(`🔍 Scraping RuTracker page: ${url}`);
 
   const res = await axios.get(url, {
@@ -102,55 +99,72 @@ async function scrapeRuTrackerPage(url) {
     },
     timeout: 25000
   });
-    const $ = cheerio.load(res.data);
-  const data = { magnetLink: null, size: null, uploadDate: null, category: null };
+  const $ = cheerio.load(res.data);
+  const data = { 
+    magnetLink: null, 
+    size: null, 
+    date: null, 
+    author: null, 
+    title: null 
+  };
 
-  // Find the attach fieldset
+  // Magnet link and size
   const attach = $('fieldset.attach');
   if (attach.length) {
-    // Magnet link
     data.magnetLink = attach.find('a.magnet-link').attr('href') || null;
-    if (data.magnetLink) console.log('🧲 Found magnet link');
-
-    // Size (look for text matching size pattern)
     const attachText = attach.text();
     const sizeMatch = attachText.match(/\d+(\.\d+)?\s*(GB|MB|KB|TB)/i);
     if (sizeMatch) {
       data.size = sizeMatch[0];
-      console.log('💾 Found size:', data.size);
     }
   }
 
-  // Дата
-  for (const sel of [
-    'td:contains("Добавлен") + td',
-    'td:contains("Зарегистрирован") + td',
-    'td:contains("Added") + td',
-    'td:contains("Registered") + td'
-  ]) {
-    const txt = $(sel).first().text().trim();
-    if (txt && /\d{1,2}[./-]\d{1,2}[./-]\d{2,4}/.test(txt)) {
-      data.uploadDate = txt;
-      console.log('📅 Found date:', txt);
-      break;
-    }
-  }
+  // Title
+  data.title = $('#topic-title').text().trim() || null;
 
-  // Категория
-  const lastCrumb = $('.nav a, .breadcrumb a')
-    .filter((i,el) => $(el).attr('href')?.includes('viewforum') )
-    .last()
-    .text()
-    .trim();
-  if (lastCrumb) {
-    data.category = lastCrumb;
-    console.log('📂 Found category:', lastCrumb);
-  }
+  // Author
+  data.author = $('td.poster_info.td1.hide-for-print > p.nick.nick-author').first().text().trim() || null;
 
-  console.log(`✅ Scraped data for ${url}`, data);
+  // Date
+  data.date = $('td.message.td2 > div.post_head > p > span.hl-scrolled-to-wrap > a').first().text().trim() || null;
+
   return data;
 }
 
+
+// Function to search Bing for RuTracker results
+async function searchBingRuTracker(query) {
+  const dorkQuery = `intitle:"${query}" site:rutracker.org`;
+  const searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(dorkQuery)}`;
+
+  console.log(`🔍 Searching Bing: ${searchUrl}`);
+  const res = await axios.get(searchUrl, {
+    headers: {
+      'User-Agent': USER_AGENT,
+      'Accept': 'text/html,*/*;q=0.9',
+    },
+    timeout: 15000
+  });
+  const $ = cheerio.load(res.data);
+  const results = [];
+
+  $('.b_algo').each((_, el) => {
+    const anchor = $(el).find('h2 a').first();
+    const href = anchor.attr('href');
+    const title = anchor.text().trim();
+    if (!href || !title) return;
+    if (href.includes('rutracker.org')) {
+      results.push({
+        title,
+        url: href,
+        snippet: $(el).find('.b_caption p').text().trim()
+      });
+    }
+  });
+
+  console.log(`✅ Bing found ${results.length} results`);
+  return results.slice(0, 6);
+}
 
 // API endpoint for searching torrents
 app.get('/api/search', async (req, res) => {
@@ -164,8 +178,12 @@ app.get('/api/search', async (req, res) => {
     console.log(`🚀 Starting search for: "${query}"`);
     
     // Step 1: Search DuckDuckGo for RuTracker results
-    const searchResults = await searchDuckDuckGo(query);
-    console.log(`📊 Found ${searchResults.length} search results`);
+    let searchResults = await searchDuckDuckGo(query);
+
+    if (searchResults.length === 0) {
+      console.log('❌ No results from DuckDuckGo. Falling back to Bing...');
+      searchResults = await searchBingRuTracker(query);
+    }
 
     if (searchResults.length === 0) {
       console.log('❌ No search results found');
@@ -184,10 +202,10 @@ app.get('/api/search', async (req, res) => {
         if (torrentData) {
           torrents.push({
             id: `rt-${Date.now()}-${processedCount}`,
-            name: result.title,
+            name: torrentData.title || result.title,
             size: torrentData.size || 'Unknown',
-            uploadDate: torrentData.uploadDate || 'Unknown',
-            category: torrentData.category || 'Unknown',
+            uploadDate: torrentData.date || 'Unknown',
+            author: torrentData.author || 'Unknown',
             tracker: 'RuTracker',
             magnetLink: torrentData.magnetLink,
             url: result.url
@@ -199,6 +217,9 @@ app.get('/api/search', async (req, res) => {
         
         processedCount++;
         
+        // Add delay to avoid rate limiting
+        await new Promise(r => setTimeout(r, 1000));
+
         // Limit processing to avoid timeouts
         if (processedCount >= 4) break;
         
