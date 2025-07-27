@@ -51,9 +51,9 @@ export function TorrentResultCard({ result, isPlaceholder = false }: TorrentResu
             <Badge variant="outline" className="text-xs">
               {result.tracker}
             </Badge>
-            {result.category && result.category !== 'Unknown' && (
+            {result.author && result.author !== 'Unknown' && (
               <Badge variant="secondary" className="text-xs">
-                {result.category}
+                {result.author}
               </Badge>
             )}
           </div>

@@ -6,6 +6,7 @@ import { Button } from './ui/button'
 import { motion, AnimatePresence } from 'motion/react'
 import { TorrentResultCard } from './TorrentResultCard'
 import { TorrentResult } from '../utils/torrentUtils'
+import { Search } from 'lucide-react'
 import axios from 'axios'
 
 export type SortOption = 'name' | 'size' | 'date'
@@ -27,7 +28,7 @@ export function sortResults(results: TorrentResult[], sortBy: SortOption): Torre
           const match = sizeStr.match(/(\d+\.?\d*)\s*(GB|MB|KB|TB)/i)
           if (!match) return 0
           const size = parseFloat(match[1])
-          const unit = match[2].toUpperCase()
+          const unit = match[2].toUpperCase() as keyof typeof multipliers
           const multipliers = { KB: 1, MB: 1024, GB: 1024 * 1024, TB: 1024 * 1024 * 1024 }
           return size * (multipliers[unit] || 0)
         }
@@ -81,30 +82,21 @@ export function TorrentSearch() {
   const [results, setResults] = useState<TorrentResult[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [sortBy, setSortBy] = useState<SortOption>('name')
-  const [showPlaceholders, setShowPlaceholders] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Auto-search when user types
+  // Clear results when search query is emptied
   useEffect(() => {
-    const delayedSearch = setTimeout(() => {
-      if (searchQuery.trim()) {
-        handleSearch()
-      } else if (hasSearched) {
-        setResults([])
-        setShowPlaceholders(false)
-        setError(null)
-      }
-    }, 1000) // Increased delay for scraping
-
-    return () => clearTimeout(delayedSearch)
+    if (!searchQuery.trim() && hasSearched) {
+      setResults([])
+      setHasSearched(false)
+    }
   }, [searchQuery, hasSearched])
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
     
-    setShowPlaceholders(false)
     setHasSearched(true)
     setIsLoading(true)
     setError(null)
@@ -128,8 +120,6 @@ export function TorrentSearch() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value)
     if (e.target.value.trim()) {
-      setShowPlaceholders(false)
-      setHasSearched(true)
       setError(null)
     }
   }
@@ -150,27 +140,40 @@ export function TorrentSearch() {
 
   return (
     <div className="min-h-screen bg-background overflow-hidden">
-      {/* Header - disappears when search is focused */}
-      <motion.div 
-        initial={{ opacity: 1 }}
-        animate={{ 
-          opacity: isFocused || hasSearched ? 0 : 1,
-          y: isFocused || hasSearched ? -50 : 0
-        }}
-        transition={{ duration: 0.6, ease: "easeInOut" }}
-        className="text-center pt-20 pb-8"
-      >
-        <h1 className="mb-4 text-4xl tracking-tight text-foreground">TorrentFinder</h1>
-        <p className="text-muted-foreground max-w-2xl mx-auto px-6">
+      {/* Header Container */}
+      <div className="text-center pt-20 pb-8">
+        {/* Title - stays visible and moves up */}
+        <motion.h1 
+          initial={{ opacity: 1 }}
+          animate={{ 
+            opacity: 1,
+            y: isFocused || hasSearched ? -50 : 0
+          }}
+          transition={{ duration: 0.6, ease: "easeInOut" }}
+          className="mb-4 text-4xl tracking-tight text-foreground"
+        >
+          TorrentFinder
+        </motion.h1>
+        
+        {/* Description - fades away when search is focused */}
+        <motion.p 
+          initial={{ opacity: 1 }}
+          animate={{ 
+            opacity: isFocused || hasSearched ? 0 : 1,
+            y: isFocused || hasSearched ? -50 : 0
+          }}
+          transition={{ duration: 0.6, ease: "easeInOut" }}
+          className="text-muted-foreground max-w-2xl mx-auto px-6"
+        >
           Search RuTracker.org for torrents using real-time web scraping
-        </p>
-      </motion.div>
+        </motion.p>
+      </div>
 
-      {/* Search Container - moves from center to top */}
+      {/* Search Container - moves from center to top, positioned higher when description fades */}
       <motion.div
         initial={{ y: 0 }}
         animate={{ 
-          y: isFocused || hasSearched ? -200 : 0
+          y: isFocused || hasSearched ? -240 : 0
         }}
         transition={{ duration: 0.6, ease: "easeInOut" }}
         className="flex items-center justify-center min-h-[40vh]"
@@ -181,24 +184,40 @@ export function TorrentSearch() {
           transition={{ delay: 0.1 }}
           className="w-full max-w-2xl px-6"
         >
-          <Input
-            type="text"
-            placeholder="Search torrents on RuTracker..."
-            value={searchQuery}
-            onChange={handleInputChange}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            className="h-16 bg-input text-foreground placeholder:text-muted-foreground border-border text-lg rounded-full px-8 transition-all duration-300"
-          />
-          {error && !isLoading && (
-            <motion.p 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-destructive text-sm mt-2 text-center"
+          {/* Search field with embedded search button */}
+          <div className="relative">
+            <Input
+              type="text"
+              placeholder="Search torrents on RuTracker..."
+              value={searchQuery}
+              onChange={handleInputChange}
+              onFocus={handleFocus}
+              onBlur={handleBlur}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              className="h-16 bg-input text-foreground placeholder:text-muted-foreground border-border text-lg rounded-full px-8 pr-16 transition-all duration-300"
+            />
+            <Button
+              onClick={handleSearch}
+              disabled={!searchQuery.trim() || isLoading}
+              size="sm"
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 h-12 w-12 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-300 disabled:opacity-50"
             >
-              {error}
-            </motion.p>
-          )}
+              <Search className="h-5 w-5" />
+            </Button>
+          </div>
+          
+          {/* Error message - positioned absolutely to prevent layout shift */}
+          <div className="relative h-8 mt-2">
+            {error && !isLoading && (
+              <motion.p 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-destructive text-sm text-center absolute inset-0 flex items-center justify-center"
+              >
+                {error}
+              </motion.p>
+            )}
+          </div>
         </motion.div>
       </motion.div>
 

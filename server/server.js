@@ -29,10 +29,14 @@ async function searchDuckDuckGo(query) {
   const res = await axios.get(searchUrl, {
     headers: {
       'User-Agent': USER_AGENT,
+      'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Accept-Charset': 'utf-8',
       'Accept': 'text/html,*/*;q=0.9',
     },
     timeout: 15000
   });
+  // console.log('Status:', res.status);
+  // console.log('First 1000 chars:', res.data.slice(0, 5000));
   const $ = cheerio.load(res.data);
   const results = [];
 
@@ -95,6 +99,8 @@ async function scrapeRuTrackerPage(url) {
   const res = await axios.get(url, {
     headers: {
       'User-Agent': USER_AGENT,
+      'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Accept-Charset': 'utf-8',
       'Referer': 'https://html.duckduckgo.com/',
     },
     timeout: 25000
@@ -141,6 +147,8 @@ async function searchBingRuTracker(query) {
   const res = await axios.get(searchUrl, {
     headers: {
       'User-Agent': USER_AGENT,
+      'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Accept-Charset': 'utf-8',
       'Accept': 'text/html,*/*;q=0.9',
     },
     timeout: 15000

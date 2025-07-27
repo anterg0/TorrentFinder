@@ -3,7 +3,7 @@ export interface TorrentResult {
   name: string
   size: string
   uploadDate: string
-  category: string
+  author: string
   tracker: string
   magnetLink?: string
   url?: string
