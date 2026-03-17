@@ -6,7 +6,7 @@ import { Button } from './ui/button'
 import { motion, AnimatePresence } from 'motion/react'
 import { TorrentResultCard } from './TorrentResultCard'
 import { TorrentResult } from '../utils/torrentUtils'
-import { Search } from 'lucide-react'
+import { Search, User, Lock, X, Shield } from 'lucide-react'
 import axios from 'axios'
 
 export type SortOption = 'name' | 'size' | 'date'
@@ -23,7 +23,6 @@ export function sortResults(results: TorrentResult[], sortBy: SortOption): Torre
       case 'name':
         return a.name.localeCompare(b.name)
       case 'size':
-        // Extract numeric value from size string for proper sorting
         const parseSize = (sizeStr: string) => {
           const match = sizeStr.match(/(\d+\.?\d*)\s*(GB|MB|KB|TB)/i)
           if (!match) return 0
@@ -41,23 +40,21 @@ export function sortResults(results: TorrentResult[], sortBy: SortOption): Torre
   })
 }
 
-// Real API search function
+// Updated search function with auth awareness
 export async function searchTorrents(query: string): Promise<TorrentResult[]> {
   try {
     console.log(`Searching for: "${query}"`)
-    
-    // First try to check if server is running
+
     const healthResponse = await axios.get('http://localhost:3001/api/health', {
       timeout: 5000
     })
     console.log('Server health check:', healthResponse.data)
-    
-    // If health check passes, make the search request
+
     const response = await axios.get(`http://localhost:3001/api/search`, {
       params: { q: query },
-      timeout: 45000 // 45 second timeout for scraping
+      timeout: 45000
     })
-    
+
     console.log('Search response:', response.data)
     return response.data
   } catch (error) {
@@ -67,6 +64,8 @@ export async function searchTorrents(query: string): Promise<TorrentResult[]> {
         throw new Error('❌ Backend server is not running.\n\nPlease run: npm run dev:backend\n\nOr start both servers with: npm run dev')
       } else if (error.code === 'ECONNABORTED') {
         throw new Error('⏱️ Search timed out. RuTracker might be slow or blocking requests. Try again in a few minutes.')
+      } else if (error.response?.status === 401) {
+        throw new Error('🔐 RuTracker authentication required')
       } else if (error.response?.status === 400) {
         throw new Error('❌ Invalid search query. Please try different search terms.')
       } else if (error.response?.status === 500) {
@@ -75,6 +74,32 @@ export async function searchTorrents(query: string): Promise<TorrentResult[]> {
     }
     throw new Error('❌ Failed to search torrents. Please check your internet connection and try again.')
   }
+}
+
+export async function loginRuTracker(username: string, password: string, captcha: string = ''): Promise<boolean> {
+  try {
+    const response = await axios.post('http://localhost:3001/api/auth', {
+      username,
+      password,
+      captcha
+    }, {
+      timeout: 30000
+    })
+    return response.data.success
+  } catch {
+    return false
+  }
+}
+
+async function getMagnetLink(id: string): Promise<string> {
+  const res = await axios.get(`http://localhost:3001/api/magnet/${id}`, {
+    timeout: 15000
+  })
+  return res.data.magnet
+}
+
+function downloadTorrent(id: string) {
+  window.location.href = `http://localhost:3001/api/download/${id}`
 }
 
 export function TorrentSearch() {
@@ -86,6 +111,33 @@ export function TorrentSearch() {
   const [hasSearched, setHasSearched] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Auth modal state
+  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [authUsername, setAuthUsername] = useState('')
+  const [authPassword, setAuthPassword] = useState('')
+  const [authLoading, setAuthLoading] = useState(false)
+  const [authError, setAuthError] = useState('')
+  const [showCaptcha, setShowCaptcha] = useState(false)
+  const [captchaCode, setCaptchaCode] = useState('')
+  const [captchaImageLoaded, setCaptchaImageLoaded] = useState(false)
+  const [captchaError, setCaptchaError] = useState('')
+  const [captchaImageSrc, setCaptchaImageSrc] = useState('/api/captcha')
+
+
+  const handleMagnetClick = async (id: string) => {
+    try {
+      const magnet = await getMagnetLink(id)
+      window.location.href = magnet
+    } catch (e) {
+      console.error(e)
+      alert('Failed to fetch magnet link')
+    }
+  }
+
+  const handleDownloadClick = (id: string) => {
+    downloadTorrent(id)
+  }
+
   // Clear results when search query is emptied
   useEffect(() => {
     if (!searchQuery.trim() && hasSearched) {
@@ -96,26 +148,71 @@ export function TorrentSearch() {
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
-    
+
     setHasSearched(true)
     setIsLoading(true)
     setError(null)
-    
+
     try {
       const searchResults = await searchTorrents(searchQuery)
       setResults(searchResults)
-      
+
       if (searchResults.length === 0) {
         setError('No results found. Try a different search term.')
       }
     } catch (error) {
       console.error('Search error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred'
       setResults([])
-      setError(error instanceof Error ? error.message : 'An unexpected error occurred')
+      setError(errorMessage)
+
+      // Show auth modal for 401 errors
+      if (errorMessage.includes('authentication required') || errorMessage.includes('🔐')) {
+        setShowAuthModal(true)
+      }
     } finally {
       setIsLoading(false)
     }
   }
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setAuthLoading(true)
+    setAuthError('')
+    setCaptchaError('')
+
+    try {
+      const success = await loginRuTracker(authUsername, authPassword, captchaCode)
+      if (success) {
+        setShowAuthModal(false)
+        setShowCaptcha(false)
+        setCaptchaCode('')
+        setCaptchaImageLoaded(false)
+        setCaptchaImageSrc('/api/captcha')
+        // Auto-retry search
+        setTimeout(() => handleSearch(), 500)
+      } else {
+        if (!showCaptcha) {
+          setShowCaptcha(true)
+          setCaptchaImageSrc('/api/captcha?t=' + Date.now())
+          setCaptchaImageLoaded(false)
+          setAuthError('Login failed. Solve CAPTCHA below.')
+        } else if (!captchaImageLoaded) {
+          setAuthError('CAPTCHA unavailable. Try again.')
+        } else {
+          setAuthError('Wrong CAPTCHA. Click image to refresh.')
+          setCaptchaImageSrc('/api/captcha?t=' + Date.now())
+        }
+      }
+    } catch (error) {
+      setAuthError('Network error. Check server.')
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value)
@@ -140,12 +237,170 @@ export function TorrentSearch() {
 
   return (
     <div className="min-h-screen bg-background overflow-hidden">
+      {/* Auth Modal - CAPTCHA Only When Image Downloaded */}
+      {/* Auth Modal - Fixed JSX + CAPTCHA Only When Image Downloaded */}
+      <AnimatePresence>
+        {showAuthModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => setShowAuthModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              transition={{ duration: 0.2 }}
+              className="bg-background/95 backdrop-blur-xl border border-border/50 rounded-2xl p-8 max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/20 rounded-xl border">
+                    <Shield className="h-6 w-6 text-primary" />
+                  </div>
+                  <div className="whiteText">
+                    <h2 className="text-2xl font-bold">RuTracker Login</h2>
+                    <p className="text-sm">Enter credentials to search</p>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAuthModal(false)}
+                  className="h-9 w-9 p-0 hover:bg-accent"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <form onSubmit={handleAuthSubmit} className="space-y-4 whiteText">
+                {/* Username */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Username</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      className="pl-10 h-11"
+                      placeholder="Username"
+                      value={authUsername}
+                      onChange={(e) => setAuthUsername(e.target.value)}
+                      disabled={authLoading}
+                    />
+                  </div>
+                </div>
+
+                {/* Password */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="password"
+                      className="pl-10 h-11"
+                      placeholder="Password"
+                      value={authPassword}
+                      onChange={(e) => setAuthPassword(e.target.value)}
+                      disabled={authLoading}
+                    />
+                  </div>
+                </div>
+
+                {/* CAPTCHA - ONLY when image successfully downloaded */}
+                {showCaptcha && captchaImageLoaded && (
+                  <div className="space-y-3 pt-2 border-t border-border/50">
+                    <label className="text-sm font-medium">CAPTCHA</label>
+                    <div className="space-y-2">
+                      <img
+                        id="captchaImg"
+                        src={captchaImageSrc}
+                        alt="CAPTCHA"
+                        className="w-full h-20 object-contain border rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
+                        onLoad={() => {
+                          setCaptchaImageLoaded(true)
+                          setCaptchaError('')
+                        }}
+                        onError={() => {
+                          setCaptchaImageLoaded(false)
+                          setCaptchaError('Failed to load CAPTCHA')
+                        }}
+                        onClick={() => {
+                          setCaptchaImageSrc(`/api/captcha?t=${Date.now()}`)
+                        }}
+                      />
+                      <Input
+                        id="captchaInput"
+                        className="pl-10 h-11"
+                        placeholder="Enter CAPTCHA digits"
+                        maxLength={6}
+                        value={captchaCode}
+                        onChange={(e) => setCaptchaCode(e.target.value)}
+                        disabled={!captchaImageLoaded}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* CAPTCHA error */}
+                {captchaError && (
+                  <p className="text-destructive text-xs text-center p-2 bg-destructive/10 rounded">
+                    {captchaError}
+                  </p>
+                )}
+
+                {authError && (
+                  <motion.p
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="text-destructive text-sm p-3 bg-destructive/10 border border-destructive/30 rounded-lg"
+                  >
+                    {authError}
+                  </motion.p>
+                )}
+
+                <Button
+                  type="submit"
+                  className="w-full h-12"
+                  disabled={authLoading ||
+                    !authUsername.trim() ||
+                    !authPassword.trim() ||
+                    (showCaptcha && (!captchaImageLoaded || !captchaCode.trim()))}
+                >
+                  {authLoading ? (
+                    <>
+                      <div className="animate-spin w-4 h-4 border-2 border-background border-r-transparent rounded-full mr-2" />
+                      Logging in...
+                    </>
+                  ) : showCaptcha ? (
+                    'Login with CAPTCHA'
+                  ) : (
+                    'Login & Search'
+                  )}
+                </Button>
+
+                <p className="text-xs text-center">
+                  {!showCaptcha
+                    ? "Login will show CAPTCHA if needed"
+                    : captchaImageLoaded
+                      ? "Click CAPTCHA to refresh"
+                      : "Loading CAPTCHA image..."}
+                </p>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+
+
       {/* Header Container */}
       <div className="text-center pt-20 pb-8">
-        {/* Title - stays visible and moves up */}
-        <motion.h1 
+        <motion.h1
           initial={{ opacity: 1 }}
-          animate={{ 
+          animate={{
             opacity: 1,
             y: isFocused || hasSearched ? -50 : 0
           }}
@@ -154,11 +409,10 @@ export function TorrentSearch() {
         >
           TorrentFinder
         </motion.h1>
-        
-        {/* Description - fades away when search is focused */}
-        <motion.p 
+
+        <motion.p
           initial={{ opacity: 1 }}
-          animate={{ 
+          animate={{
             opacity: isFocused || hasSearched ? 0 : 1,
             y: isFocused || hasSearched ? -50 : 0
           }}
@@ -169,22 +423,21 @@ export function TorrentSearch() {
         </motion.p>
       </div>
 
-      {/* Search Container - moves from center to top, positioned higher when description fades */}
+      {/* Search Container */}
       <motion.div
         initial={{ y: 0 }}
-        animate={{ 
+        animate={{
           y: isFocused || hasSearched ? -240 : 0
         }}
         transition={{ duration: 0.6, ease: "easeInOut" }}
         className="flex items-center justify-center min-h-[40vh]"
       >
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="w-full max-w-2xl px-6"
         >
-          {/* Search field with embedded search button */}
           <div className="relative">
             <Input
               type="text"
@@ -195,21 +448,21 @@ export function TorrentSearch() {
               onBlur={handleBlur}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               className="h-16 bg-input text-foreground placeholder:text-muted-foreground border-border text-lg rounded-full px-8 pr-16 transition-all duration-300"
+              disabled={showAuthModal}
             />
             <Button
               onClick={handleSearch}
-              disabled={!searchQuery.trim() || isLoading}
+              disabled={!searchQuery.trim() || isLoading || showAuthModal}
               size="sm"
               className="absolute right-2 top-1/2 transform -translate-y-1/2 h-12 w-12 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-300 disabled:opacity-50"
             >
               <Search className="h-5 w-5" />
             </Button>
           </div>
-          
-          {/* Error message - positioned absolutely to prevent layout shift */}
+
           <div className="relative h-8 mt-2">
-            {error && !isLoading && (
-              <motion.p 
+            {error && !isLoading && !showAuthModal && (
+              <motion.p
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="text-destructive text-sm text-center absolute inset-0 flex items-center justify-center"
@@ -221,7 +474,7 @@ export function TorrentSearch() {
         </motion.div>
       </motion.div>
 
-      {/* Results Container - Fixed size, appears when search is active */}
+      {/* Results Container */}
       <AnimatePresence>
         {showResults && (
           <motion.div
@@ -231,9 +484,8 @@ export function TorrentSearch() {
             transition={{ duration: 0.6, ease: "easeInOut" }}
             className="fixed bottom-0 left-0 right-0 h-[60vh] bg-background"
           >
-            {/* Sort Options */}
             {results.length > 0 && !isLoading && !error && (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3 }}
@@ -253,12 +505,9 @@ export function TorrentSearch() {
               </motion.div>
             )}
 
-            {/* Results with faded edges */}
             <div className="relative h-full">
-              {/* Fade gradient at top */}
               <div className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none" />
-              
-              {/* Scrollable results area */}
+
               <div className="h-full overflow-y-auto px-6 pt-4 pb-20">
                 <div className="max-w-4xl mx-auto">
                   <AnimatePresence mode="wait">
@@ -283,8 +532,8 @@ export function TorrentSearch() {
                         className="text-center py-12"
                       >
                         <p className="text-destructive mb-2">{error}</p>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           onClick={() => handleSearch()}
                           disabled={!searchQuery.trim()}
                         >
@@ -306,7 +555,12 @@ export function TorrentSearch() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.03 }}
                           >
-                            <TorrentResultCard result={result} isPlaceholder={false} />
+                            <TorrentResultCard
+                              result={result}
+                              isPlaceholder={false}
+                              onMagnetClick={handleMagnetClick}
+                              onDownloadClick={handleDownloadClick}
+                            />
                           </motion.div>
                         ))}
                       </motion.div>
@@ -328,7 +582,6 @@ export function TorrentSearch() {
                 </div>
               </div>
 
-              {/* Fade gradient at bottom */}
               <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-background to-transparent pointer-events-none" />
             </div>
           </motion.div>

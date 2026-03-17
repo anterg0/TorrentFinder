@@ -81,6 +81,10 @@
   --sidebar-ring: #666666;
 }
 
+.whiteText {
+  color: white;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

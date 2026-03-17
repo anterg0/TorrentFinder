@@ -5,23 +5,25 @@ import { Card } from './ui/card'
 import { TorrentResult } from '../utils/torrentUtils'
 
 interface TorrentResultCardProps {
-  result: TorrentResult & { 
+  result: TorrentResult & {
     magnetLink?: string
     url?: string
   }
   isPlaceholder?: boolean
+  onMagnetClick?: (id: string) => void
+  onDownloadClick?: (id: string) => void
 }
 
-export function TorrentResultCard({ result, isPlaceholder = false }: TorrentResultCardProps) {
+export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick, onDownloadClick }: TorrentResultCardProps) {
   const handleMagnetClick = () => {
-    if (result.magnetLink && !isPlaceholder) {
-      window.location.href = result.magnetLink
+    if (!isPlaceholder && onMagnetClick) {
+      onMagnetClick(result.id)
     }
   }
 
   const handleDownloadClick = () => {
-    if (result.url && !isPlaceholder) {
-      window.open(result.url, '_blank', 'noopener,noreferrer')
+    if (!isPlaceholder && onDownloadClick) {
+      onDownloadClick(result.id)
     }
   }
 
@@ -32,7 +34,7 @@ export function TorrentResultCard({ result, isPlaceholder = false }: TorrentResu
           <h3 className="mb-3 group-hover:text-primary transition-colors truncate text-lg">
             {result.name}
           </h3>
-          
+
           <div className="flex items-center gap-6 text-sm text-muted-foreground mb-2">
             <div className="flex items-center gap-2">
               <HardDrive className="w-4 h-4" />
@@ -58,22 +60,22 @@ export function TorrentResultCard({ result, isPlaceholder = false }: TorrentResu
             )}
           </div>
         </div>
-        
+
         {/* Split Magnet/Download Button */}
         <div className="flex shrink-0">
-          <Button 
-            size="sm" 
+          <Button
+            size="sm"
             className="rounded-r-none border-r border-primary-foreground/20 px-3"
-            disabled={isPlaceholder || !result.magnetLink}
+            disabled={isPlaceholder || !onMagnetClick}
             onClick={handleMagnetClick}
             title={result.magnetLink ? "Open magnet link" : "Magnet link not available"}
           >
             <Magnet className="w-4 h-4" />
           </Button>
-          <Button 
-            size="sm" 
+          <Button
+            size="sm"
             className="rounded-l-none px-3"
-            disabled={isPlaceholder || !result.url}
+            disabled={isPlaceholder || !onDownloadClick}
             onClick={handleDownloadClick}
             title={result.url ? "Open RuTracker page" : "Page not available"}
           >
