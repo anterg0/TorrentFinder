@@ -1,5 +1,3 @@
-'use client'
-
 import { useState, useEffect } from 'react'
 import { Input } from './ui/input'
 import { Button } from './ui/button'
@@ -31,7 +29,7 @@ export function sortResults(results: TorrentResult[], sortBy: SortOption): Torre
           const multipliers = { KB: 1, MB: 1024, GB: 1024 * 1024, TB: 1024 * 1024 * 1024 }
           return size * (multipliers[unit] || 0)
         }
-        return parseSize(a.size) - parseSize(b.size)
+        return parseSize(b.size) - parseSize(a.size)
       case 'date':
         return new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
       default:
@@ -237,8 +235,6 @@ export function TorrentSearch() {
 
   return (
     <div className="min-h-screen bg-background overflow-hidden">
-      {/* Auth Modal - CAPTCHA Only When Image Downloaded */}
-      {/* Auth Modal - Fixed JSX + CAPTCHA Only When Image Downloaded */}
       <AnimatePresence>
         {showAuthModal && (
           <motion.div

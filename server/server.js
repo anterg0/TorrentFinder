@@ -10,7 +10,7 @@ app.use(express.json())
 const client = new RuTracker()
 
 /* =========================
-   🔐 AUTH
+   AUTH
 ========================= */
 
 app.post('/api/auth', async (req, res) => {
@@ -53,7 +53,7 @@ app.get('/api/search', async (req, res) => {
 })
 
 /* =========================
-   🧲 MAGNET
+   MAGNET
 ========================= */
 
 app.get('/api/magnet/:id', async (req, res) => {
@@ -68,7 +68,7 @@ app.get('/api/magnet/:id', async (req, res) => {
 })
 
 /* =========================
-   ⬇️ DOWNLOAD
+   DOWNLOAD
 ========================= */
 
 app.get('/api/download/:id', async (req, res) => {

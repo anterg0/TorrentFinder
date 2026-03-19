@@ -25,7 +25,7 @@ export default class RuTracker {
   }
 
   /* =========================
-     🍪 COOKIE HANDLING
+     COOKIE HANDLING
   ========================= */
 
   saveCookies() {
@@ -71,7 +71,7 @@ export default class RuTracker {
   }
 
   /* =========================
-     🔐 LOGIN
+     LOGIN
   ========================= */
 
   async login(username, password) {
@@ -92,7 +92,7 @@ export default class RuTracker {
   }
 
   /* =========================
-     🔍 SEARCH
+     SEARCH
   ========================= */
 
   async search(query) {
@@ -114,12 +114,14 @@ export default class RuTracker {
 
       const size = $(el).find('td').eq(5).text().trim()
       const date = $(el).find('td').eq(9).text().trim()
+      const author = $(el).find('div.u-name a').text().trim()
 
       results.push({
         id: `rt-${id}`,
         name: title,
         size,
         uploadDate: date,
+        author,
         tracker: 'RuTracker'
       })
     })
@@ -128,7 +130,7 @@ export default class RuTracker {
   }
 
   /* =========================
-     🧲 MAGNET
+     MAGNET
   ========================= */
 
   async getMagnetLink(topicId) {
@@ -147,7 +149,7 @@ export default class RuTracker {
   }
 
   /* =========================
-     ⬇️ TORRENT DOWNLOAD
+     TORRENT DOWNLOAD
   ========================= */
 
   async downloadTorrent(topicId) {
