@@ -415,7 +415,7 @@ export function TorrentSearch() {
           transition={{ duration: 0.6, ease: "easeInOut" }}
           className="text-muted-foreground max-w-2xl mx-auto px-6"
         >
-          Search RuTracker.org for torrents using real-time web scraping
+          Search RuTracker.org, Online-Fix.me and FreeTP.org<br/>for torrents using real-time web scraping
         </motion.p>
       </div>
 
@@ -437,7 +437,7 @@ export function TorrentSearch() {
           <div className="relative">
             <Input
               type="text"
-              placeholder="Search torrents on RuTracker..."
+              placeholder="Search for torrents..."
               value={searchQuery}
               onChange={handleInputChange}
               onFocus={handleFocus}
@@ -516,7 +516,7 @@ export function TorrentSearch() {
                         className="text-center py-12"
                       >
                         <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-                        <p className="text-muted-foreground">Searching RuTracker...</p>
+                        <p className="text-muted-foreground">Searching...</p>
                         <p className="text-xs text-muted-foreground mt-2">This may take up to 30 seconds</p>
                       </motion.div>
                     ) : error ? (
