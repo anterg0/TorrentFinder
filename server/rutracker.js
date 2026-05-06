@@ -115,6 +115,8 @@ export default class RuTracker {
       const size = $(el).find('td').eq(5).text().trim()
       const date = $(el).find('td').eq(9).text().trim()
       const author = $(el).find('div.u-name a').text().trim()
+      const seedAmount = $(el).find('b.seedmed').text().trim()
+      const leechAmount = $(el).find('td.leechmed').text().trim()
 
       results.push({
         id: `rt-${id}`,
@@ -122,7 +124,9 @@ export default class RuTracker {
         size,
         uploadDate: date,
         author,
-        tracker: 'RuTracker'
+        tracker: 'RuTracker',
+        seeds: seedAmount,
+        leeches: leechAmount
       })
     })
 

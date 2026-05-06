@@ -7,4 +7,6 @@ export interface TorrentResult {
   tracker: string
   magnetLink?: string
   url?: string
+  seeds?: string
+  leeches?: string
 }

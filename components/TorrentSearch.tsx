@@ -3,8 +3,9 @@ import { Input } from './ui/input'
 import { Button } from './ui/button'
 import { motion, AnimatePresence } from 'motion/react'
 import { TorrentResultCard } from './TorrentResultCard'
+import { SettingsSidebar } from './SettingsSidebar'
 import { TorrentResult } from '../utils/torrentUtils'
-import { Search, User, Lock, X, Shield } from 'lucide-react'
+import { Search, User, Lock, X, Shield, Menu } from 'lucide-react'
 import axios from 'axios'
 
 export type SortOption = 'name' | 'size' | 'date'
@@ -121,6 +122,29 @@ export function TorrentSearch() {
   const [captchaError, setCaptchaError] = useState('')
   const [captchaImageSrc, setCaptchaImageSrc] = useState('/api/captcha')
 
+  // Sidebar and auth status state
+  const [showSidebar, setShowSidebar] = useState(false)
+  const [ruTrackerAuth, setRuTrackerAuth] = useState(false)
+  const [onlineFixAuth, setOnlineFixAuth] = useState(false)
+  const [freeTpAuth, setFreeTpAuth] = useState(false)
+
+  // Check auth status on mount
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      try {
+        const response = await axios.get('http://localhost:3001/api/auth-status', {
+          timeout: 5000
+        })
+        setRuTrackerAuth(response.data.rutracker || false)
+        setOnlineFixAuth(response.data.onlinefix || false)
+        setFreeTpAuth(response.data.freetp || false)
+      } catch (error) {
+        console.error('Failed to check auth status:', error)
+      }
+    }
+    checkAuthStatus()
+  }, [])
+
 
   const handleMagnetClick = async (id: string) => {
     try {
@@ -187,6 +211,7 @@ export function TorrentSearch() {
         setCaptchaCode('')
         setCaptchaImageLoaded(false)
         setCaptchaImageSrc('/api/captcha')
+        setRuTrackerAuth(true)
         // Auto-retry search
         setTimeout(() => handleSearch(), 500)
       } else {
@@ -206,6 +231,24 @@ export function TorrentSearch() {
       setAuthError('Network error. Check server.')
     } finally {
       setAuthLoading(false)
+    }
+  }
+
+  const handleLogout = async (service: 'rutracker' | 'onlinefix' | 'freetp') => {
+    try {
+      await axios.post(`http://localhost:3001/api/logout/${service}`, {}, {
+        timeout: 5000
+      })
+      
+      if (service === 'rutracker') {
+        setRuTrackerAuth(false)
+      } else if (service === 'onlinefix') {
+        setOnlineFixAuth(false)
+      } else if (service === 'freetp') {
+        setFreeTpAuth(false)
+      }
+    } catch (error) {
+      console.error(`Failed to logout from ${service}:`, error)
     }
   }
 
@@ -390,7 +433,31 @@ export function TorrentSearch() {
         )}
       </AnimatePresence>
 
+      {/* Hamburger Menu Button */}
+      <div className="fixed top-4 right-4 z-40">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setShowSidebar(true)}
+          className="h-10 w-10"
+        >
+          <Menu className="h-6 w-6 text-foreground" />
+        </Button>
+      </div>
 
+      {/* Settings Sidebar */}
+      <SettingsSidebar
+        isOpen={showSidebar}
+        onClose={() => setShowSidebar(false)}
+        ruTrackerAuth={ruTrackerAuth}
+        onlineFixAuth={onlineFixAuth}
+        freeTpAuth={freeTpAuth}
+        onLogin={() => {
+          setShowSidebar(false)
+          setShowAuthModal(true)
+        }}
+        onLogout={handleLogout}
+      />
 
       {/* Header Container */}
       <div className="text-center pt-20 pb-8">
@@ -478,7 +545,7 @@ export function TorrentSearch() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 50 }}
             transition={{ duration: 0.6, ease: "easeInOut" }}
-            className="fixed bottom-0 left-0 right-0 h-[60vh] bg-background"
+            className="fixed bottom-0 left-0 right-0 top-[180px] bg-background"
           >
             {results.length > 0 && !isLoading && !error && (
               <motion.div

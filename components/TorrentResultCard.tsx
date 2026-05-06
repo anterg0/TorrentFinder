@@ -1,4 +1,4 @@
-import { Download, Magnet, HardDrive, Clock } from 'lucide-react'
+import { Download, Magnet, HardDrive, Clock, ArrowUp, ArrowDown } from 'lucide-react'
 import { Button } from './ui/button'
 import { Badge } from './ui/badge'
 import { Card } from './ui/card'
@@ -45,6 +45,20 @@ export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4" />
                 <span>{result.uploadDate}</span>
+              </div>
+            )}
+
+            {result.tracker === 'RuTracker' && result.seeds && result.seeds !== 'Unknown' && (
+              <div className="flex items-center gap-2 text-green-500">
+                <ArrowUp className="w-4 h-4" />
+                <span>{result.seeds}</span>
+              </div>
+            )}
+
+            {result.tracker === 'RuTracker' && result.leeches && result.leeches !== 'Unknown' && (
+              <div className="flex items-center gap-2 text-red-500">
+                <ArrowDown className="w-4 h-4" />
+                <span>{result.leeches}</span>
               </div>
             )}
           </div>
