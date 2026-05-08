@@ -9,6 +9,7 @@ interface SettingsSidebarProps {
   onlineFixAuth: boolean
   freeTpAuth: boolean
   onLogin: () => void
+  onOnlineFixLogin: () => void
   onLogout: (service: 'rutracker' | 'onlinefix' | 'freetp') => void
 }
 
@@ -19,6 +20,7 @@ export function SettingsSidebar({
   onlineFixAuth,
   freeTpAuth,
   onLogin,
+  onOnlineFixLogin,
   onLogout
 }: SettingsSidebarProps) {
   return (
@@ -107,7 +109,6 @@ export function SettingsSidebar({
                         size="sm"
                         className="w-full"
                         onClick={() => onLogout('onlinefix')}
-                        disabled
                       >
                         <LogOut className="h-4 w-4 mr-2" />
                         Logout
@@ -117,10 +118,10 @@ export function SettingsSidebar({
                         variant="default"
                         size="sm"
                         className="w-full"
-                        disabled
+                        onClick={onOnlineFixLogin}
                       >
                         <User className="h-4 w-4 mr-2" />
-                        Coming Soon
+                        Login
                       </Button>
                     )}
                   </div>

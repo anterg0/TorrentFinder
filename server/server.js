@@ -1,13 +1,15 @@
 import express from 'express'
 import cors from 'cors'
 import RuTracker from './rutracker.js'
+import OnlineFix from './onlinefix.js'
 
 const app = express()
 
 app.use(cors())
 app.use(express.json())
 
-const client = new RuTracker()
+const ruTrackerClient = new RuTracker()
+const onlineFixClient = new OnlineFix()
 
 /* =========================
    AUTH
@@ -15,19 +17,32 @@ const client = new RuTracker()
 
 app.post('/api/auth', async (req, res) => {
   const { username, password } = req.body
+  const service = req.query.service || 'ru' // Default to RuTracker
 
   try {
-    if (await client.isLoggedIn()) {
-      return res.json({ success: true, cached: true })
-    }
+    let client, success, isLoggedIn
 
-    const success = await client.login(username, password)
+    if (service === 'ru') {
+      // RuTracker
+      if (await ruTrackerClient.isLoggedIn()) {
+        return res.json({ success: true, cached: true, service: 'rutracker' })
+      }
+      success = await ruTrackerClient.login(username, password)
+    } else if (service === 'of') {
+      // Online-Fix
+      if (await onlineFixClient.isLoggedIn()) {
+        return res.json({ success: true, cached: true, service: 'onlinefix' })
+      }
+      success = await onlineFixClient.login(username, password)
+    } else {
+      return res.status(400).json({ error: 'Unknown service' })
+    }
 
     if (!success) {
       return res.status(401).json({ success: false })
     }
 
-    res.json({ success: true })
+    res.json({ success: true, service })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
@@ -41,11 +56,44 @@ app.get('/api/search', async (req, res) => {
   const q = req.query.q
 
   try {
-    if (!(await client.isLoggedIn())) {
-      return res.status(401).json({ error: 'Not authenticated' })
+    const results = []
+
+    // Check auth status
+    const ruTrackerLoggedIn = await ruTrackerClient.isLoggedIn()
+    const onlineFixLoggedIn = await onlineFixClient.isLoggedIn()
+
+    console.log(`🔐 Auth status - RuTracker: ${ruTrackerLoggedIn}, Online-Fix: ${onlineFixLoggedIn}`)
+
+    // Search RuTracker
+    if (ruTrackerLoggedIn) {
+      try {
+        const ruTrackerResults = await ruTrackerClient.search(q)
+        results.push(...ruTrackerResults)
+        console.log(`✅ RuTracker: ${ruTrackerResults.length} results`)
+      } catch (err) {
+        console.log('⚠️ RuTracker search failed:', err.message)
+      }
+    } else {
+      console.log('⚠️ RuTracker: Not logged in')
     }
 
-    const results = await client.search(q)
+    // Search Online-Fix
+    if (onlineFixLoggedIn) {
+      try {
+        const onlineFixResults = await onlineFixClient.search(q)
+        results.push(...onlineFixResults)
+        console.log(`✅ Online-Fix: ${onlineFixResults.length} results`)
+      } catch (err) {
+        console.log('⚠️ Online-Fix search failed:', err.message)
+      }
+    } else {
+      console.log('⚠️ Online-Fix: Not logged in')
+    }
+
+    if (results.length === 0) {
+      return res.status(401).json({ error: 'Not authenticated with any tracker' })
+    }
+
     res.json(results)
   } catch (e) {
     res.status(500).json({ error: e.message })
@@ -57,10 +105,21 @@ app.get('/api/search', async (req, res) => {
 ========================= */
 
 app.get('/api/magnet/:id', async (req, res) => {
-  const id = req.params.id.replace('rt-', '')
+  const id = req.params.id
 
   try {
-    const magnet = await client.getMagnetLink(id)
+    let magnet
+    
+    if (id.startsWith('of-')) {
+      // Online-Fix result
+      const gameId = id.replace('of-', '')
+      magnet = await onlineFixClient.getMagnetLink(gameId)
+    } else {
+      // RuTracker result
+      const rtId = id.replace('rt-', '')
+      magnet = await ruTrackerClient.getMagnetLink(rtId)
+    }
+    
     res.json({ magnet })
   } catch (e) {
     res.status(500).json({ error: e.message })
@@ -72,18 +131,30 @@ app.get('/api/magnet/:id', async (req, res) => {
 ========================= */
 
 app.get('/api/download/:id', async (req, res) => {
-  const id = req.params.id.replace('rt-', '')
+  const id = req.params.id
+  const gameName = req.query.gameName // For Online-Fix
 
   try {
-    const file = await client.downloadTorrent(id)
+    if (id.startsWith('of-')) {
+      // Online-Fix - redirect to torrents directory
+      if (!gameName) {
+        return res.status(400).json({ error: 'gameName parameter required for Online-Fix' })
+      }
+      const torrentUrl = `https://uploads.online-fix.me:2053/torrents/${encodeURIComponent(gameName)}/`
+      return res.redirect(torrentUrl)
+    } else {
+      // RuTracker - download torrent file
+      const rtId = id.replace('rt-', '')
+      const file = await ruTrackerClient.downloadTorrent(rtId)
 
-    res.setHeader('Content-Type', 'application/x-bittorrent')
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="torrent_${id}.torrent"`
-    )
+      res.setHeader('Content-Type', 'application/x-bittorrent')
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="torrent_${rtId}.torrent"`
+      )
 
-    res.send(file)
+      res.send(file)
+    }
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
@@ -92,11 +163,49 @@ app.get('/api/download/:id', async (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'OK',
-    authenticated: !!client
+    authenticated: !!ruTrackerClient
   });
 });
 
-/* ========================= */
+app.get('/api/auth-status', async (req, res) => {
+  try {
+    const rutracker = await ruTrackerClient.isLoggedIn()
+    const onlinefix = await onlineFixClient.isLoggedIn()
+    res.json({
+      rutracker,
+      onlinefix,
+      freetp: false
+    })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+app.post('/api/logout/:service', async (req, res) => {
+  const { service } = req.params
+  
+  try {
+    if (service === 'rutracker') {
+      // Delete RuTracker cookies
+      if (ruTrackerClient.cookieFile) {
+        const fs = await import('fs')
+        fs.unlinkSync(ruTrackerClient.cookieFile)
+      }
+      res.json({ success: true })
+    } else if (service === 'onlinefix') {
+      // Delete Online-Fix cookies
+      if (onlineFixClient.cookieFile) {
+        const fs = await import('fs')
+        fs.unlinkSync(onlineFixClient.cookieFile)
+      }
+      res.json({ success: true })
+    } else {
+      res.status(400).json({ error: 'Unknown service' })
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
 
 app.listen(3001, () => {
   console.log('🚀 Server running on http://localhost:3001')

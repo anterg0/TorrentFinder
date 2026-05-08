@@ -8,7 +8,7 @@ import { wrapper } from 'axios-cookiejar-support'
 export default class RuTracker {
   constructor() {
     this.baseURL = 'https://rutracker.org/forum/'
-    this.cookieFile = './cookies.json'
+    this.cookieFile = './cookiesRutracker.json'
 
     this.jar = new CookieJar()
 
@@ -54,18 +54,23 @@ export default class RuTracker {
           }
         }))
 
-        console.log('✅ Cookies loaded')
-      } catch {
-        console.log('⚠️ Failed to load cookies')
+        console.log('✅ RuTracker cookies loaded')
+      } catch (err) {
+        console.log('⚠️ Failed to load RuTracker cookies:', err.message)
       }
+    } else {
+      console.log('⚠️ RuTracker cookie file not found')
     }
   }
 
   async isLoggedIn() {
     try {
       const res = await this.client.get('index.php')
-      return res.data.includes('logout')
-    } catch {
+      const isLogged = res.data.includes('logout')
+      console.log(`✅ RuTracker: ${isLogged ? 'Logged in' : 'Not logged in'}`)
+      return isLogged
+    } catch (err) {
+      console.log('❌ RuTracker: Error checking login status:', err.message)
       return false
     }
   }

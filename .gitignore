@@ -35,3 +35,5 @@ package-lock.json
 yarn.lock
 pnpm-lock.yaml
 cookies.json
+cookiesRutracker.json
+cookiesOnlineFix.json

@@ -121,6 +121,13 @@ export function TorrentSearch() {
   const [captchaImageLoaded, setCaptchaImageLoaded] = useState(false)
   const [captchaError, setCaptchaError] = useState('')
   const [captchaImageSrc, setCaptchaImageSrc] = useState('/api/captcha')
+  
+  // Online-Fix auth modal state
+  const [showOnlineFixAuthModal, setShowOnlineFixAuthModal] = useState(false)
+  const [onlineFixUsername, setOnlineFixUsername] = useState('')
+  const [onlineFixPassword, setOnlineFixPassword] = useState('')
+  const [onlineFixAuthLoading, setOnlineFixAuthLoading] = useState(false)
+  const [onlineFixAuthError, setOnlineFixAuthError] = useState('')
 
   // Sidebar and auth status state
   const [showSidebar, setShowSidebar] = useState(false)
@@ -249,6 +256,37 @@ export function TorrentSearch() {
       }
     } catch (error) {
       console.error(`Failed to logout from ${service}:`, error)
+    }
+  }
+
+  const handleOnlineFixAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setOnlineFixAuthLoading(true)
+    setOnlineFixAuthError('')
+
+    try {
+      const response = await axios.post('http://localhost:3001/api/auth?service=of', {
+        username: onlineFixUsername,
+        password: onlineFixPassword
+      }, {
+        timeout: 30000
+      })
+      
+      if (response.data.success) {
+        setShowOnlineFixAuthModal(false)
+        setOnlineFixUsername('')
+        setOnlineFixPassword('')
+        setOnlineFixAuth(true)
+      } else {
+        setOnlineFixAuthError('Login failed. Please check your credentials.')
+      }
+    } catch (error) {
+      const errorMsg = axios.isAxiosError(error) 
+        ? error.response?.data?.error || 'Network error'
+        : 'Network error. Check server.'
+      setOnlineFixAuthError(errorMsg)
+    } finally {
+      setOnlineFixAuthLoading(false)
     }
   }
 
@@ -433,6 +471,109 @@ export function TorrentSearch() {
         )}
       </AnimatePresence>
 
+      {/* Online-Fix Auth Modal */}
+      <AnimatePresence>
+        {showOnlineFixAuthModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => setShowOnlineFixAuthModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              transition={{ duration: 0.2 }}
+              className="bg-background/95 backdrop-blur-xl border border-border/50 rounded-2xl p-8 max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/20 rounded-xl border">
+                    <Shield className="h-6 w-6 text-primary" />
+                  </div>
+                  <div className="whiteText">
+                    <h2 className="text-2xl font-bold">Online-Fix Login</h2>
+                    <p className="text-sm">Enter credentials to test</p>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowOnlineFixAuthModal(false)}
+                  className="h-9 w-9 p-0 hover:bg-accent"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <form onSubmit={handleOnlineFixAuthSubmit} className="space-y-4 whiteText">
+                {/* Username */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Username</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      className="pl-10 h-11"
+                      placeholder="Username"
+                      value={onlineFixUsername}
+                      onChange={(e) => setOnlineFixUsername(e.target.value)}
+                      disabled={onlineFixAuthLoading}
+                    />
+                  </div>
+                </div>
+
+                {/* Password */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="password"
+                      className="pl-10 h-11"
+                      placeholder="Password"
+                      value={onlineFixPassword}
+                      onChange={(e) => setOnlineFixPassword(e.target.value)}
+                      disabled={onlineFixAuthLoading}
+                    />
+                  </div>
+                </div>
+
+                {onlineFixAuthError && (
+                  <motion.p
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="text-destructive text-sm p-3 bg-destructive/10 border border-destructive/30 rounded-lg"
+                  >
+                    {onlineFixAuthError}
+                  </motion.p>
+                )}
+
+                <Button
+                  type="submit"
+                  className="w-full h-12"
+                  disabled={onlineFixAuthLoading ||
+                    !onlineFixUsername.trim() ||
+                    !onlineFixPassword.trim()}
+                >
+                  {onlineFixAuthLoading ? (
+                    <>
+                      <div className="animate-spin w-4 h-4 border-2 border-background border-r-transparent rounded-full mr-2" />
+                      Logging in...
+                    </>
+                  ) : (
+                    'Test Login'
+                  )}
+                </Button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Hamburger Menu Button */}
       <div className="fixed top-4 right-4 z-40">
         <Button
@@ -455,6 +596,10 @@ export function TorrentSearch() {
         onLogin={() => {
           setShowSidebar(false)
           setShowAuthModal(true)
+        }}
+        onOnlineFixLogin={() => {
+          setShowSidebar(false)
+          setShowOnlineFixAuthModal(true)
         }}
         onLogout={handleLogout}
       />
