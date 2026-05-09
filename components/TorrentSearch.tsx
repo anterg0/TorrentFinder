@@ -228,6 +228,81 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
                       <p className="mt-2 text-lg font-semibold text-foreground">{enrichedResult.gameStore}</p>
                     </div>
                   )}
+                  {/* Official Servers - Separate */}
+                  {enrichedResult.supportsOfficialServers && (
+                    <div className="rounded-3xl border border-green-500/30 bg-green-500/10 px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500">
+                          <span className="text-sm font-bold text-white">✓</span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-green-400">Official Servers Supported</p>
+                          <p className="text-xs text-muted-foreground">You can play on official servers</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {((enrichedResult.coopPlayers && parseInt(enrichedResult.coopPlayers) > 0) ||
+                    (enrichedResult.multiplayerPlayers && parseInt(enrichedResult.multiplayerPlayers) > 0)) && (
+
+                      <div className="space-y-3">
+
+                        {/* COOP + MULTIPLAYER - Separate cards with blue background if > 0 players */}
+                        {(enrichedResult.coopPlayers || enrichedResult.multiplayerPlayers) && (
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+                            {/* COOP */}
+                            {enrichedResult.coopPlayers && (
+                              <div className={`rounded-3xl px-5 py-4 transition-colors ${parseInt(enrichedResult.coopPlayers) > 0
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-accent/40 text-foreground'
+                                }`}>
+                                <div className="flex items-baseline justify-between">
+                                  <div>
+                                    <p className={`text-xs uppercase tracking-[0.2em] ${parseInt(enrichedResult.coopPlayers) > 0 ? 'text-blue-200' : 'text-muted-foreground'
+                                      }`}>
+                                      COOPERATIVE
+                                    </p>
+                                    <p className="mt-1 text-3xl font-semibold">
+                                      {enrichedResult.coopPlayers}
+                                    </p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className={`text-sm ${parseInt(enrichedResult.coopPlayers) > 0 ? 'text-blue-200' : 'text-muted-foreground'
+                                      }`}>players</p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* MULTIPLAYER */}
+                            {enrichedResult.multiplayerPlayers && (
+                              <div className={`rounded-3xl px-5 py-4 transition-colors ${parseInt(enrichedResult.multiplayerPlayers) > 0
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-accent/40 text-foreground'
+                                }`}>
+                                <div className="flex items-baseline justify-between">
+                                  <div>
+                                    <p className={`text-xs uppercase tracking-[0.2em] ${parseInt(enrichedResult.multiplayerPlayers) > 0 ? 'text-blue-200' : 'text-muted-foreground'
+                                      }`}>
+                                      MULTIPLAYER
+                                    </p>
+                                    <p className="mt-1 text-3xl font-semibold">
+                                      {enrichedResult.multiplayerPlayers}
+                                    </p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className={`text-sm ${parseInt(enrichedResult.multiplayerPlayers) > 0 ? 'text-blue-200' : 'text-muted-foreground'
+                                      }`}>players</p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                   {enrichedResult.gameInfo && (
                     <div className="space-y-3 rounded-3xl border border-border/60 bg-background/80 p-5">
@@ -264,83 +339,6 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
                       <p className="mt-2 text-sm text-muted-foreground">{enrichedResult.updateInfo}</p>
                     </div>
                   )}
-                  {/* Network Modes - Separate sections */}
-                  {(enrichedResult.supportsOfficialServers ||
-                    (enrichedResult.coopPlayers && parseInt(enrichedResult.coopPlayers) > 0) ||
-                    (enrichedResult.multiplayerPlayers && parseInt(enrichedResult.multiplayerPlayers) > 0)) && (
-
-                      <div className="space-y-3">
-
-                        {/* Official Servers - Separate */}
-                        {enrichedResult.supportsOfficialServers && (
-                          <div className="rounded-3xl border border-green-500/30 bg-green-500/10 px-5 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500">
-                                <span className="text-sm font-bold text-white">✓</span>
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium text-green-400">Official Servers Supported</p>
-                                <p className="text-xs text-muted-foreground">You can play on official servers</p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* COOP + MULTIPLAYER - Separate cards with blue background if > 0 players */}
-                        {(enrichedResult.coopPlayers || enrichedResult.multiplayerPlayers) && (
-                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-
-                            {/* COOP */}
-                            {enrichedResult.coopPlayers && (
-                              <div className={`rounded-3xl px-5 py-4 transition-colors ${parseInt(enrichedResult.coopPlayers) > 0
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-accent/40 text-foreground'
-                                }`}>
-                                <div className="flex items-baseline justify-between">
-                                  <div>
-                                    <p className={`text-xs uppercase tracking-[0.2em] ${parseInt(enrichedResult.coopPlayers) > 0 ? 'text-blue-200' : 'text-muted-foreground'
-                                      }`}>
-                                      COOPERATIVE
-                                    </p>
-                                    <p className="mt-1 text-3xl font-semibold">
-                                      {enrichedResult.coopPlayers}
-                                    </p>
-                                  </div>
-                                  <div className="text-right">
-                                    <p className={`text-sm ${parseInt(enrichedResult.coopPlayers) > 0 ? 'text-blue-200' : 'text-muted-foreground'
-                                      }`}>players</p>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* MULTIPLAYER */}
-                            {enrichedResult.multiplayerPlayers && (
-                              <div className={`rounded-3xl px-5 py-4 transition-colors ${parseInt(enrichedResult.multiplayerPlayers) > 0
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-accent/40 text-foreground'
-                                }`}>
-                                <div className="flex items-baseline justify-between">
-                                  <div>
-                                    <p className={`text-xs uppercase tracking-[0.2em] ${parseInt(enrichedResult.multiplayerPlayers) > 0 ? 'text-blue-200' : 'text-muted-foreground'
-                                      }`}>
-                                      MULTIPLAYER
-                                    </p>
-                                    <p className="mt-1 text-3xl font-semibold">
-                                      {enrichedResult.multiplayerPlayers}
-                                    </p>
-                                  </div>
-                                  <div className="text-right">
-                                    <p className={`text-sm ${parseInt(enrichedResult.multiplayerPlayers) > 0 ? 'text-blue-200' : 'text-muted-foreground'
-                                      }`}>players</p>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
                 </div>
               ) : (
                 // RuTracker/FreeTP content

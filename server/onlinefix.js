@@ -472,6 +472,11 @@ export default class OnlineFix {
       const $article = $('div[itemprop="articleBody"]')
       const rawText = $article.text().replace(/\s+/g, ' ').trim()
 
+      const supportsOfficialServers =
+        /официальных серверах|official servers|play on official servers|официальные сервера/i.test(rawText);
+
+      details.supportsOfficialServers = supportsOfficialServers;
+
       // === Релиз игры ===
       const releaseMatch = rawText.match(/Релиз игры[:\s]*(\d{1,2}[.\\/]\d{1,2}[.\\/]\d{2,4})/i)
       if (releaseMatch) details.releaseDate = releaseMatch[1].trim()
