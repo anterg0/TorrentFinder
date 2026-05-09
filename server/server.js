@@ -109,7 +109,7 @@ app.get('/api/magnet/:id', async (req, res) => {
 
   try {
     let magnet
-    
+
     if (id.startsWith('of-')) {
       // Online-Fix result
       const gameId = id.replace('of-', '')
@@ -119,7 +119,7 @@ app.get('/api/magnet/:id', async (req, res) => {
       const rtId = id.replace('rt-', '')
       magnet = await ruTrackerClient.getMagnetLink(rtId)
     }
-    
+
     res.json({ magnet })
   } catch (e) {
     res.status(500).json({ error: e.message })
@@ -133,15 +133,31 @@ app.get('/api/magnet/:id', async (req, res) => {
 app.get('/api/download/:id', async (req, res) => {
   const id = req.params.id
   const gameName = req.query.gameName // For Online-Fix
+  const gameUrl = req.query.gameUrl
+  const type = req.query.type || 'torrent'   // 'torrent' or 'repair'
 
   try {
     if (id.startsWith('of-')) {
-      // Online-Fix - redirect to torrents directory
       if (!gameName) {
-        return res.status(400).json({ error: 'gameName parameter required for Online-Fix' })
+        return res.status(400).json({ error: 'gameName parameter required' })
       }
-      const torrentUrl = `https://uploads.online-fix.me:2053/torrents/${encodeURIComponent(gameName)}/`
-      return res.redirect(torrentUrl)
+
+      if (type === 'repair') {
+        const repair = await onlineFixClient.downloadRepair(gameName, gameUrl)
+        
+        res.setHeader('Content-Type', 'application/x-rar-compressed')
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="${repair.filename}"`
+        )
+        return res.send(repair.buffer)
+      } else {
+        // existing torrent logic
+        const file = await onlineFixClient.downloadTorrent(gameName, gameUrl)
+        res.setHeader('Content-Type', 'application/x-bittorrent')
+        res.setHeader('Content-Disposition', `attachment; filename="${gameName}.torrent"`)
+        return res.send(file)
+      }
     } else {
       // RuTracker - download torrent file
       const rtId = id.replace('rt-', '')
@@ -183,7 +199,7 @@ app.get('/api/auth-status', async (req, res) => {
 
 app.post('/api/logout/:service', async (req, res) => {
   const { service } = req.params
-  
+
   try {
     if (service === 'rutracker') {
       // Delete RuTracker cookies

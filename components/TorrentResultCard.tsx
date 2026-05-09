@@ -1,4 +1,4 @@
-import { Download, Magnet, HardDrive, Clock, ArrowUp, ArrowDown, ExternalLink, Link2 } from 'lucide-react'
+import { Download, Magnet, HardDrive, Clock, ArrowUp, ArrowDown, ExternalLink, Link2, Wrench } from 'lucide-react'
 import { Button } from './ui/button'
 import { Badge } from './ui/badge'
 import { Card } from './ui/card'
@@ -33,13 +33,16 @@ export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick
     }
   }
 
-  const handleDownloadClick = () => {
+  const handleDownloadClick = (type: 'torrent' | 'repair' = 'torrent') => {
     if (!isPlaceholder) {
-      if (isOnlineFix && result.url) {
-        // For Online-Fix, open the FTP directory with game name
-        if (result.gameName) {
-          const ftpUrl = `https://uploads.online-fix.me:2053/torrents/${encodeURIComponent(result.gameName)}/`
-          window.open(ftpUrl, '_blank')
+      if (isOnlineFix) {
+        if (result.gameName && result.url) {
+          const params = new URLSearchParams({
+            gameName: result.gameName,
+            gameUrl: result.url,
+            type
+          })
+          window.location.href = `http://localhost:3001/api/download/${result.id}?${params.toString()}`
         }
       } else if (onDownloadClick) {
         onDownloadClick(result.id)
@@ -108,25 +111,39 @@ export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick
           </div>
         </div>
 
-        {/* Split Magnet/Download Button */}
+        {/* Action Buttons */}
         <div className="flex shrink-0">
+          {/* Magnet / Page button */}
           <Button
             size="sm"
             className="rounded-r-none border-r border-primary-foreground/20 px-3"
             disabled={isPlaceholder || (isOnlineFix ? !result.url : !onMagnetClick)}
             onClick={handleMagnetClick}
-            title={isOnlineFix ? (result.url ? "Open game page" : "Page not available") : (result.magnetLink ? "Open magnet link" : "Magnet link not available")}
           >
             {isOnlineFix ? <Link2 className="w-4 h-4" /> : <Magnet className="w-4 h-4" />}
           </Button>
+
+          {/* NEW: Repair / Wrench button - only for Online-Fix */}
+          {isOnlineFix && (
+            <Button
+              size="sm"
+              className="rounded-none border-x border-primary-foreground/20 px-3"
+              disabled={isPlaceholder || !result.gameName}
+              onClick={() => handleDownloadClick('repair')}
+              title="Download Fix Repair (.rar)"
+            >
+              <Wrench className="w-4 h-4" />
+            </Button>
+          )}
+
+          {/* Download button */}
           <Button
             size="sm"
-            className="rounded-l-none px-3"
+            className={`${isOnlineFix ? 'rounded-l-none' : 'rounded-l-none'} px-3`}
             disabled={isPlaceholder || (isOnlineFix ? !result.gameName : !onDownloadClick)}
-            onClick={handleDownloadClick}
-            title={isOnlineFix ? (result.gameName ? "Open FTP directory" : "Game name not available") : (result.url ? "Open RuTracker page" : "Page not available")}
+            onClick={() => handleDownloadClick('torrent')}
           >
-            {isOnlineFix ? <ExternalLink className="w-4 h-4" /> : <Download className="w-4 h-4" />}
+            <Download className="w-4 h-4" />
           </Button>
         </div>
       </div>

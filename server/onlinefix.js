@@ -65,7 +65,7 @@ export default class OnlineFix {
     if (Buffer.isBuffer(data)) {
       console.log(`Buffer size: ${data.length} bytes`)
       console.log(`First 100 bytes (hex): ${data.slice(0, 100).toString('hex')}`)
-      
+
       const decoded = this.decodeResponse(data, contentType)
       console.log(`Decoded string (first 300 chars): ${decoded.substring(0, 300)}`)
       return decoded
@@ -157,7 +157,7 @@ export default class OnlineFix {
           tokenName = parsed.field
           tokenValue = parsed.value
         }
-      } catch {}
+      } catch { }
 
       if (!tokenName) {
         const match = tokenData.match(/token_([a-f0-9]+)/)
@@ -231,8 +231,8 @@ export default class OnlineFix {
         if (!id) return
 
         const gameName = title.replace(/\s+по\s+сети$/i, '')
-                           .replace(/\s+по\s+сету$/i, '')
-                           .trim()
+          .replace(/\s+по\s+сету$/i, '')
+          .trim()
 
         results.push({
           id: `of-${id}`,
@@ -277,11 +277,108 @@ export default class OnlineFix {
     }
   }
 
-  async downloadTorrent(topicId) {
+  async downloadTorrent(gameFolder, gamePageUrl = null) {
     try {
-      return `https://uploads.online-fix.me:2053/torrents/${encodeURIComponent(topicId)}/`
+      // 1. Warm up the session on the real game page (this sets online_fix_auth)
+      if (gamePageUrl) {
+        await this.client.get(gamePageUrl, {
+          headers: { 'Referer': 'https://online-fix.me/' }
+        })
+      } else {
+        // Fallback (not ideal)
+        await this.client.get(`https://online-fix.me/`, {
+          headers: { 'Referer': 'https://online-fix.me/' }
+        })
+      }
+
+      // 2. Get the torrent directory listing
+      const dirUrl = `https://uploads.online-fix.me:2053/torrents/${encodeURIComponent(gameFolder)}/`
+      const dirRes = await this.client.get(dirUrl, {
+        headers: { 'Referer': gamePageUrl || 'https://online-fix.me/' }
+      })
+
+      const dirHtml = this.decodeResponse(dirRes.data, dirRes.headers['content-type'])
+      const $ = cheerio.load(dirHtml)
+
+      // 3. Find the .torrent file (there's only one)
+      let torrentFilename = null
+      $('a').each((_, el) => {
+        const href = $(el).attr('href') || ''
+        if (href.endsWith('.torrent')) {
+          torrentFilename = href
+          return false
+        }
+      })
+
+      if (!torrentFilename) {
+        torrentFilename = `${gameFolder}.torrent` // fallback
+      }
+
+      // 4. Download the actual .torrent file
+      const torrentUrl = `https://uploads.online-fix.me:2053/torrents/${encodeURIComponent(gameFolder)}/${encodeURIComponent(torrentFilename)}`
+
+      const torrentRes = await this.client.get(torrentUrl, {
+        responseType: 'arraybuffer',
+        headers: { 'Referer': dirUrl }
+      })
+
+      console.log(`✅ Online-Fix: Downloaded ${torrentFilename} for ${gameFolder}`)
+      return torrentRes.data
+
     } catch (err) {
-      console.error('Error getting torrent download:', err.message)
+      console.error('Online-Fix torrent download error:', err.message)
+      throw err
+    }
+  }
+
+  async downloadRepair(gameFolder, gamePageUrl = null) {
+    try {
+      // 1. Warm up session
+      if (gamePageUrl) {
+        await this.client.get(gamePageUrl, {
+          headers: { 'Referer': 'https://online-fix.me/' }
+        })
+      }
+
+      // 2. List the Fix Repair folder
+      const repairDirUrl = `https://uploads.online-fix.me:2053/uploads/${encodeURIComponent(gameFolder)}/Fix%20Repair/`
+      const dirRes = await this.client.get(repairDirUrl, {
+        headers: { 'Referer': gamePageUrl || 'https://online-fix.me/' }
+      })
+
+      const dirHtml = this.decodeResponse(dirRes.data, dirRes.headers['content-type'])
+      const $ = cheerio.load(dirHtml)
+
+      // 3. Find .rar files (usually only one)
+      const rarFiles = []
+      $('a').each((_, el) => {
+        const href = $(el).attr('href') || ''
+        if (href.toLowerCase().endsWith('.rar')) {
+          rarFiles.push(href)
+        }
+      })
+
+      if (rarFiles.length === 0) {
+        throw new Error('No .rar repair file found in Fix Repair folder')
+      }
+
+      // Download the first .rar (you can improve later to zip multiple)
+      const rarFile = rarFiles[0]
+      const rarUrl = `https://uploads.online-fix.me:2053/uploads/${encodeURIComponent(gameFolder)}/Fix%20Repair/${encodeURIComponent(rarFile)}`
+
+      const rarRes = await this.client.get(rarUrl, {
+        responseType: 'arraybuffer',
+        headers: { 'Referer': repairDirUrl }
+      })
+
+      console.log(`✅ Online-Fix: Downloaded repair ${rarFile} for ${gameFolder}`)
+      return {
+        buffer: rarRes.data,
+        filename: rarFile
+      }
+
+    } catch (err) {
+      console.error('Online-Fix repair download error:', err.message)
       throw err
     }
   }
