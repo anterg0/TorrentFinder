@@ -1,6 +1,7 @@
 import axios from 'axios'
 import * as cheerio from 'cheerio'
 import fs from 'fs'
+import { TextDecoder } from 'util'
 
 import { CookieJar } from 'tough-cookie'
 import { wrapper } from 'axios-cookiejar-support'
@@ -17,11 +18,62 @@ export default class OnlineFix {
       jar: this.jar,
       withCredentials: true,
       headers: {
-        'User-Agent': 'Mozilla/5.0'
-      }
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Charset': 'utf-8'
+      },
+      responseType: 'arraybuffer'
     }))
 
     this.loadCookies()
+  }
+
+  /* =========================
+     DECODING (FIXED)
+  ========================= */
+
+  /**
+   * Decode response using the charset from Content-Type header
+   */
+  decodeResponse(data, contentType = '') {
+    if (!Buffer.isBuffer(data)) {
+      return typeof data === 'string' ? data : String(data)
+    }
+
+    // Extract charset from header (e.g. "text/html; charset=windows-1251")
+    let charset = 'utf-8'
+    if (contentType) {
+      const match = contentType.match(/charset=([\w-]+)/i)
+      if (match) {
+        charset = match[1].toLowerCase()
+      }
+    }
+
+    console.log(`[Decoding] Using charset: ${charset}`)
+
+    try {
+      const decoder = new TextDecoder(charset, { fatal: false })
+      return decoder.decode(data)
+    } catch (err) {
+      console.warn(`Failed to decode with ${charset}, falling back to utf-8`)
+      return new TextDecoder('utf-8', { fatal: false }).decode(data)
+    }
+  }
+
+  debugLogEncoding(label, data, contentType = '') {
+    console.log(`\n=== DEBUG: ${label} ===`)
+    if (Buffer.isBuffer(data)) {
+      console.log(`Buffer size: ${data.length} bytes`)
+      console.log(`First 100 bytes (hex): ${data.slice(0, 100).toString('hex')}`)
+      
+      const decoded = this.decodeResponse(data, contentType)
+      console.log(`Decoded string (first 300 chars): ${decoded.substring(0, 300)}`)
+      return decoded
+    } else if (typeof data === 'string') {
+      console.log(`String length: ${data.length} characters`)
+      console.log(`First 300 chars: ${data.substring(0, 300)}`)
+      return data
+    }
   }
 
   /* =========================
@@ -32,17 +84,15 @@ export default class OnlineFix {
     try {
       const serialized = this.jar.serializeSync()
       fs.writeFileSync(this.cookieFile, JSON.stringify(serialized, null, 2))
-      console.log('💾 Cookies saved')
-    } catch {
-      console.log('❌ Failed to save cookies')
+    } catch (err) {
+      console.error('Failed to save cookies:', err.message)
     }
   }
 
   loadCookies() {
     if (fs.existsSync(this.cookieFile)) {
       try {
-        const data = JSON.parse(fs.readFileSync(this.cookieFile))
-
+        const data = JSON.parse(fs.readFileSync(this.cookieFile, 'utf-8'))
         this.jar = CookieJar.deserializeSync(data)
 
         this.client = wrapper(axios.create({
@@ -50,37 +100,28 @@ export default class OnlineFix {
           jar: this.jar,
           withCredentials: true,
           headers: {
-            'User-Agent': 'Mozilla/5.0'
-          }
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+          },
+          responseType: 'arraybuffer'
         }))
-
-        console.log('✅ Online-Fix cookies loaded')
       } catch (err) {
-        console.log('⚠️ Failed to load Online-Fix cookies:', err.message)
+        console.error('Failed to load Online-Fix cookies:', err.message)
       }
-    } else {
-      console.log('⚠️ Online-Fix cookie file not found')
     }
   }
 
   async isLoggedIn() {
     try {
-      // Check if cookie file exists and contains auth cookies
       if (fs.existsSync(this.cookieFile)) {
-        const data = JSON.parse(fs.readFileSync(this.cookieFile))
+        const data = JSON.parse(fs.readFileSync(this.cookieFile, 'utf-8'))
         const hasDleUserId = data.cookies?.some(c => c.key === 'dle_user_id')
         const hasDlePassword = data.cookies?.some(c => c.key === 'dle_password')
-        
-        if (hasDleUserId && hasDlePassword) {
-          console.log('✅ Online-Fix: Auth cookies found')
-          return true
-        }
+        return !!(hasDleUserId && hasDlePassword)
       }
-      
-      console.log('⚠️ Online-Fix: No auth cookies found')
       return false
     } catch (err) {
-      console.log('❌ Online-Fix: Error checking login status:', err.message)
+      console.error('Error checking login status:', err.message)
       return false
     }
   }
@@ -91,96 +132,50 @@ export default class OnlineFix {
 
   async extractCSRFToken() {
     try {
-      // Step 1: Visit homepage to establish session and get Cloudflare clearance
-      console.log('📄 Fetching homepage to establish session...')
       const homeRes = await this.client.get('', {
-        headers: {
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-        }
+        headers: { 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' }
       })
-      console.log('✅ Homepage loaded, status:', homeRes.status)
-      
-      // Step 2: Fetch CSRF token from the AJAX endpoint with proper headers
-      console.log('🔐 Fetching CSRF token...')
+
+      const homeHtml = this.decodeResponse(homeRes.data, homeRes.headers['content-type'])
+
       const res = await this.client.get('engine/ajax/authtoken.php', {
         headers: {
           'X-Requested-With': 'XMLHttpRequest',
           'Accept': 'application/json, text/javascript, */*; q=0.01',
-          'Referer': 'https://online-fix.me/',
-          'Sec-Fetch-Site': 'same-origin',
-          'Sec-Fetch-Mode': 'cors'
-        },
-        responseType: 'text'
+          'Referer': 'https://online-fix.me/'
+        }
       })
-      
-      console.log('📥 Token response status:', res.status)
-      console.log('📥 Token response headers:', res.headers['content-type'])
-      console.log('📥 First 300 chars:', res.data.substring(0, 300))
-      
-      // The response should contain the token in format: {"field":"token_xxxxx","value":"xxxxx"}
+
+      const tokenData = this.decodeResponse(res.data, res.headers['content-type'])
+
       let tokenName = null
       let tokenValue = null
-      
+
       try {
-        const tokenData = JSON.parse(res.data)
-        console.log('✅ Parsed as JSON:', tokenData)
-        
-        // Check if it has the expected structure
-        if (tokenData.field && tokenData.value) {
-          tokenName = tokenData.field
-          tokenValue = tokenData.value
-          console.log(`✅ Extracted token: ${tokenName} = ${tokenValue}`)
-        } else {
-          // Fallback: look for any key starting with token_
-          for (const [key, value] of Object.entries(tokenData)) {
-            if (key.startsWith('token_')) {
-              tokenName = key
-              tokenValue = value
-              break
-            }
-          }
+        const parsed = JSON.parse(tokenData)
+        if (parsed.field && parsed.value) {
+          tokenName = parsed.field
+          tokenValue = parsed.value
         }
-      } catch {
-        // If not JSON, try parsing with regex
-        const match = res.data.match(/token_([a-f0-9]+)["\s=:]+([a-f0-9]+)/)
-        if (match) {
-          tokenName = `token_${match[1]}`
-          tokenValue = match[2]
-          console.log('✅ Parsed with regex:', { tokenName, tokenValue })
-        } else {
-          console.log('⚠️ Could not parse token response - not JSON and no token pattern found')
-          return null
-        }
+      } catch {}
+
+      if (!tokenName) {
+        const match = tokenData.match(/token_([a-f0-9]+)/)
+        if (match) tokenName = match[0]
       }
-      
-      if (!tokenName || !tokenValue) {
-        console.log('⚠️ Could not extract token from response')
-        return null
-      }
-      
-      console.log(`✅ CSRF Token obtained: ${tokenName}`)
-      return { tokenName, tokenValue }
+
+      return tokenName && tokenValue ? { tokenName, tokenValue } : null
     } catch (err) {
-      console.log('❌ Failed to extract CSRF token:', err.message)
-      if (err.response) {
-        console.log('Response status:', err.response.status)
-        console.log('Response data (first 200 chars):', err.response.data?.substring?.(0, 200))
-      }
+      console.error('Failed to extract CSRF token:', err.message)
       return null
     }
   }
 
   async login(username, password) {
     try {
-      // Step 1: Extract CSRF token from the homepage
       const tokenData = await this.extractCSRFToken()
-      
-      if (!tokenData) {
-        console.log('❌ Login failed: Could not get CSRF token')
-        return false
-      }
+      if (!tokenData) return false
 
-      // Step 2: Submit login form with credentials and CSRF token
       const params = new URLSearchParams()
       params.append('login_name', username)
       params.append('login_password', password)
@@ -188,26 +183,20 @@ export default class OnlineFix {
       params.append(tokenData.tokenName, tokenData.tokenValue)
 
       const res = await this.client.post('/', params)
+      const html = this.decodeResponse(res.data, res.headers['content-type'])
 
-      // Step 3: Check if login was successful by looking for logout link or checking cookies
-      const isSuccess = res.data.includes('logout') || res.data.includes('Выход')
-      
-      if (isSuccess) {
-        console.log('✅ Logged in successfully')
-        this.saveCookies()
-        return true
-      }
+      const success = html.includes('logout') || html.includes('Выход')
+      if (success) this.saveCookies()
 
-      console.log('❌ Login failed')
-      return false
+      return success
     } catch (err) {
-      console.log('❌ Login error:', err.message)
+      console.error('Login error:', err.message)
       return false
     }
   }
 
   /* =========================
-     SEARCH
+     SEARCH (FIXED)
   ========================= */
 
   async search(query) {
@@ -222,23 +211,28 @@ export default class OnlineFix {
         }
       })
 
-      const $ = cheerio.load(res.data)
+      // === CRITICAL FIX ===
+      const contentType = res.headers['content-type'] || ''
+      this.debugLogEncoding('Raw Search Response', res.data, contentType)
+
+      const html = this.decodeResponse(res.data, contentType)
+
+      const $ = cheerio.load(html, { decodeEntities: false })
       const results = []
 
-      // Parse search results
-      // Each result has: <a href="..."><span class="searchheading">Title</span></a>
       $('a span.searchheading').each((_, el) => {
         const title = $(el).text().trim()
         const link = $(el).closest('a').attr('href')
 
         if (!title || !link) return
 
-        // Extract game name from URL: https://online-fix.me/games/category/id-gamename.html
-        const nameMatch = link.match(/\/(\d+)-(.+?)\.html/)
-        const id = nameMatch ? nameMatch[1] : null
-        const gameName = nameMatch ? nameMatch[2] : title
-
+        const idMatch = link.match(/\/(\d+)-(.+?)\.html/)
+        const id = idMatch ? idMatch[1] : null
         if (!id) return
+
+        const gameName = title.replace(/\s+по\s+сети$/i, '')
+                           .replace(/\s+по\s+сету$/i, '')
+                           .trim()
 
         results.push({
           id: `of-${id}`,
@@ -250,60 +244,44 @@ export default class OnlineFix {
           seeds: 'N/A',
           leeches: 'N/A',
           url: link,
-          gameName: gameName // Add the extracted game name
+          gameName: gameName
         })
       })
 
-      console.log(`🔍 Online-Fix search found ${results.length} results`)
+      console.log(`✅ Online-Fix: ${results.length} results`)
       return results
     } catch (err) {
-      console.log('❌ Search error:', err.message)
+      console.error('Search error:', err.message)
       throw err
     }
   }
 
   /* =========================
-     MAGNET/DETAILS
+     MAGNET / DOWNLOAD
   ========================= */
 
   async getMagnetLink(topicId) {
-    // For Online-Fix, we return the game page URL instead
-    // since magnet links and torrent details are on the game page
     try {
       const res = await this.client.get(`?do=search&story=${encodeURIComponent(topicId)}`)
-      const html = res.data
+      const html = this.decodeResponse(res.data, res.headers['content-type'])
 
-      const match = html.match(/magnet:\?xt=urn:btih:[^"]+/)
-      if (match) return match[0]
+      const magnetMatch = html.match(/magnet:\?xt=urn:btih:[^"'\s]+/)
+      if (magnetMatch) return magnetMatch[0]
 
-      const $ = cheerio.load(html)
+      const $ = cheerio.load(html, { decodeEntities: false })
       const magnet = $('a[href^="magnet:"]').attr('href')
-
-      if (magnet) return magnet
-
-      // If no magnet link found, return the search page
-      return `https://online-fix.me/?do=search&story=${encodeURIComponent(topicId)}`
+      return magnet || `https://online-fix.me/?do=search&story=${encodeURIComponent(topicId)}`
     } catch (err) {
-      console.log('❌ Error getting magnet link:', err.message)
+      console.error('Error getting magnet link:', err.message)
       return `https://online-fix.me/?do=search&story=${encodeURIComponent(topicId)}`
     }
   }
 
-  /* =========================
-     TORRENT DOWNLOAD
-  ========================= */
-
   async downloadTorrent(topicId) {
-    // For Online-Fix, torrents are accessed from:
-    // https://uploads.online-fix.me:2053/torrents/{GameName}/
-    // For now, return the torrents directory URL
-    // The actual torrent file will be accessible via the game page
     try {
-      // topicId should be the game name or ID
-      const torrentUrl = `https://uploads.online-fix.me:2053/torrents/${encodeURIComponent(topicId)}/`
-      return torrentUrl
+      return `https://uploads.online-fix.me:2053/torrents/${encodeURIComponent(topicId)}/`
     } catch (err) {
-      console.log('❌ Error getting torrent download:', err.message)
+      console.error('Error getting torrent download:', err.message)
       throw err
     }
   }

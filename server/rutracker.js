@@ -1,6 +1,7 @@
 import axios from 'axios'
 import * as cheerio from 'cheerio'
 import fs from 'fs'
+import { TextDecoder } from 'util'
 
 import { CookieJar } from 'tough-cookie'
 import { wrapper } from 'axios-cookiejar-support'
@@ -17,11 +18,50 @@ export default class RuTracker {
       jar: this.jar,
       withCredentials: true,
       headers: {
-        'User-Agent': 'Mozilla/5.0'
-      }
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Charset': 'utf-8'
+      },
+      responseType: 'arraybuffer'   // Important: keep as buffer
     }))
 
     this.loadCookies()
+  }
+
+  /* =========================
+     DECODING (THE FIX)
+  ========================= */
+
+  decodeResponse(data, contentType = '') {
+    if (!Buffer.isBuffer(data)) {
+      return typeof data === 'string' ? data : String(data)
+    }
+
+    // Detect charset from header
+    let charset = 'utf-8'
+    if (contentType) {
+      const match = contentType.match(/charset=([\w-]+)/i)
+      if (match) charset = match[1].toLowerCase()
+    }
+
+    console.log(`[RuTracker] Decoding with charset: ${charset}`)
+
+    try {
+      const decoder = new TextDecoder(charset, { fatal: false })
+      return decoder.decode(data)
+    } catch (err) {
+      console.warn(`Failed to decode with ${charset}, falling back to utf-8`)
+      return new TextDecoder('utf-8', { fatal: false }).decode(data)
+    }
+  }
+
+  debugLog(label, data, contentType = '') {
+    if (!Buffer.isBuffer(data)) return
+    console.log(`\n=== DEBUG ${label} ===`)
+    console.log(`Size: ${data.length} bytes`)
+    console.log(`First 80 bytes (hex): ${data.slice(0, 80).toString('hex')}`)
+    const decoded = this.decodeResponse(data, contentType)
+    console.log(`Decoded preview: ${decoded.substring(0, 300)}...`)
   }
 
   /* =========================
@@ -32,17 +72,16 @@ export default class RuTracker {
     try {
       const serialized = this.jar.serializeSync()
       fs.writeFileSync(this.cookieFile, JSON.stringify(serialized, null, 2))
-      console.log('💾 Cookies saved')
-    } catch {
-      console.log('❌ Failed to save cookies')
+      console.log('💾 RuTracker cookies saved')
+    } catch (err) {
+      console.error('❌ Failed to save cookies:', err.message)
     }
   }
 
   loadCookies() {
     if (fs.existsSync(this.cookieFile)) {
       try {
-        const data = JSON.parse(fs.readFileSync(this.cookieFile))
-
+        const data = JSON.parse(fs.readFileSync(this.cookieFile, 'utf-8'))
         this.jar = CookieJar.deserializeSync(data)
 
         this.client = wrapper(axios.create({
@@ -50,27 +89,27 @@ export default class RuTracker {
           jar: this.jar,
           withCredentials: true,
           headers: {
-            'User-Agent': 'Mozilla/5.0'
-          }
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+          },
+          responseType: 'arraybuffer'
         }))
-
         console.log('✅ RuTracker cookies loaded')
       } catch (err) {
-        console.log('⚠️ Failed to load RuTracker cookies:', err.message)
+        console.error('⚠️ Failed to load RuTracker cookies:', err.message)
       }
-    } else {
-      console.log('⚠️ RuTracker cookie file not found')
     }
   }
 
   async isLoggedIn() {
     try {
       const res = await this.client.get('index.php')
-      const isLogged = res.data.includes('logout')
+      const html = this.decodeResponse(res.data, res.headers['content-type'])
+      const isLogged = html.includes('logout') || html.includes('Выход')
       console.log(`✅ RuTracker: ${isLogged ? 'Logged in' : 'Not logged in'}`)
       return isLogged
     } catch (err) {
-      console.log('❌ RuTracker: Error checking login status:', err.message)
+      console.error('❌ RuTracker login check error:', err.message)
       return false
     }
   }
@@ -80,62 +119,79 @@ export default class RuTracker {
   ========================= */
 
   async login(username, password) {
-    const params = new URLSearchParams()
-    params.append('login_username', username)
-    params.append('login_password', password)
-    params.append('login', 'Вход')
+    try {
+      const params = new URLSearchParams()
+      params.append('login_username', username)
+      params.append('login_password', password)
+      params.append('login', 'Вход')
 
-    const res = await this.client.post('login.php', params)
+      const res = await this.client.post('login.php', params)
+      const html = this.decodeResponse(res.data, res.headers['content-type'])
 
-    if (res.data.includes('logout')) {
-      console.log('✅ Logged in')
-      this.saveCookies()
-      return true
+      if (html.includes('logout') || html.includes('Выход')) {
+        console.log('✅ RuTracker: Successfully logged in')
+        this.saveCookies()
+        return true
+      }
+      return false
+    } catch (err) {
+      console.error('Login error:', err.message)
+      return false
     }
-
-    return false
   }
 
   /* =========================
-     SEARCH
+     SEARCH (FIXED)
   ========================= */
 
   async search(query) {
-    const res = await this.client.get(`tracker.php?nm=${encodeURIComponent(query)}`)
-    const $ = cheerio.load(res.data)
+    try {
+      const res = await this.client.get(`tracker.php?nm=${encodeURIComponent(query)}`)
+      
+      const contentType = res.headers['content-type'] || ''
+      this.debugLog('Search Response', res.data, contentType)
 
-    const results = []
+      const html = this.decodeResponse(res.data, contentType)
+      const $ = cheerio.load(html, { decodeEntities: false })
 
-    $('.forumline tr').each((_, el) => {
-      const title = $(el).find('.tLink').text().trim()
-      const link = $(el).find('.tLink').attr('href')
+      const results = []
 
-      if (!title || !link) return
+      $('.forumline tr').each((_, el) => {
+        const titleEl = $(el).find('.tLink')
+        const title = titleEl.text().trim()
+        const link = titleEl.attr('href')
 
-      const idMatch = link.match(/t=(\d+)/)
-      if (!idMatch) return
+        if (!title || !link) return
 
-      const id = idMatch[1]
+        const idMatch = link.match(/t=(\d+)/)
+        if (!idMatch) return
 
-      const size = $(el).find('td').eq(5).text().trim()
-      const date = $(el).find('td').eq(9).text().trim()
-      const author = $(el).find('div.u-name a').text().trim()
-      const seedAmount = $(el).find('b.seedmed').text().trim()
-      const leechAmount = $(el).find('td.leechmed').text().trim()
+        const id = idMatch[1]
 
-      results.push({
-        id: `rt-${id}`,
-        name: title,
-        size,
-        uploadDate: date,
-        author,
-        tracker: 'RuTracker',
-        seeds: seedAmount,
-        leeches: leechAmount
+        const size = $(el).find('td').eq(5).text().trim()
+        const date = $(el).find('td').eq(9).text().trim()
+        const author = $(el).find('div.u-name a').text().trim()
+        const seedAmount = $(el).find('b.seedmed').text().trim()
+        const leechAmount = $(el).find('td.leechmed').text().trim()
+
+        results.push({
+          id: `rt-${id}`,
+          name: title,
+          size,
+          uploadDate: date,
+          author,
+          tracker: 'RuTracker',
+          seeds: seedAmount,
+          leeches: leechAmount
+        })
       })
-    })
 
-    return results
+      console.log(`✅ RuTracker: ${results.length} results found`)
+      return results
+    } catch (err) {
+      console.error('RuTracker search error:', err.message)
+      throw err
+    }
   }
 
   /* =========================
@@ -143,18 +199,22 @@ export default class RuTracker {
   ========================= */
 
   async getMagnetLink(topicId) {
-    const res = await this.client.get(`viewtopic.php?t=${topicId}`)
-    const html = res.data
+    try {
+      const res = await this.client.get(`viewtopic.php?t=${topicId}`)
+      const html = this.decodeResponse(res.data, res.headers['content-type'])
 
-    const match = html.match(/magnet:\?xt=urn:btih:[^"]+/)
-    if (match) return match[0]
+      const match = html.match(/magnet:\?xt=urn:btih:[^"'\s]+/)
+      if (match) return match[0]
 
-    const $ = cheerio.load(html)
-    const magnet = $('a[href^="magnet:"]').attr('href')
+      const $ = cheerio.load(html, { decodeEntities: false })
+      const magnet = $('a[href^="magnet:"]').attr('href')
 
-    if (magnet) return magnet
-
-    throw new Error('Magnet not found')
+      if (magnet) return magnet
+      throw new Error('Magnet link not found')
+    } catch (err) {
+      console.error('Error getting magnet:', err.message)
+      throw err
+    }
   }
 
   /* =========================
@@ -162,10 +222,14 @@ export default class RuTracker {
   ========================= */
 
   async downloadTorrent(topicId) {
-    const res = await this.client.get(`dl.php?t=${topicId}`, {
-      responseType: 'arraybuffer'
-    })
-
-    return res.data
+    try {
+      const res = await this.client.get(`dl.php?t=${topicId}`, {
+        responseType: 'arraybuffer'
+      })
+      return res.data // Return raw buffer (torrent file)
+    } catch (err) {
+      console.error('Torrent download error:', err.message)
+      throw err
+    }
   }
 }
