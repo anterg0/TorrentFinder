@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react'
-import { Download, Magnet, HardDrive, Clock, ArrowUp, ArrowDown, Link2, Wrench, ExternalLink } from 'lucide-react'
+import { Download, Magnet, HardDrive, Clock, ArrowUp, ArrowDown, Wrench, ExternalLink } from 'lucide-react'
 import { Button } from './ui/button'
 import { Badge } from './ui/badge'
 import { Card } from './ui/card'

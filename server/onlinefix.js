@@ -77,30 +77,35 @@ export default class OnlineFix {
   }
 
   extractSections($article) {
-    const result = { gameInfo: null, launchGuide: null, inGameGuide: null }
-
-    // Get raw HTML of the article body
-    const html = $article.html() || ''
-
-    // Split by known bold headers
-    const parts = html.split(/<b>Как запускать:<\/b>|<b>В игре:<\/b>|<b>Информация о игре:<\/b>/i)
-
-    if (parts.length >= 2) {
-      // Game Info
-      if (parts[1]) {
-        result.gameInfo = this.cleanText(parts[1].split(/<b>Как запускать:<\/b>/i)[0])
-      }
+    const result = {
+      gameInfo: null,
+      launchGuide: null,
+      inGameGuide: null
     }
 
-    // Launch Guide
-    const launchMatch = html.match(/<b>Как запускать:<\/b>([\s\S]*?)(?=<b>В игре:<\/b>|$)/i)
-    if (launchMatch) {
+    const html = $article.html() || ''
+
+    // === Game Info (handles both "о игре" and "по игре") ===
+    const gameInfoMatch = html.match(
+      /<b>Информация (?:о|по) игре[^<]*<\/b>([\s\S]*?)(?=<b>Как запускать:<\/b>|<b>Файлы для игры:<\/b>|$)/i
+    )
+    if (gameInfoMatch && gameInfoMatch[1]) {
+      result.gameInfo = this.cleanText(gameInfoMatch[1])
+    }
+
+    // === Launch Guide ===
+    const launchMatch = html.match(
+      /<b>Как запускать:<\/b>([\s\S]*?)(?=<b>В игре:<\/b>|<b>Информация о сетевых|$)/i
+    )
+    if (launchMatch && launchMatch[1]) {
       result.launchGuide = this.cleanText(launchMatch[1])
     }
 
-    // In Game
-    const inGameMatch = html.match(/<b>В игре:<\/b>([\s\S]*?)(?=<b>Информация о сетевых|$)/i)
-    if (inGameMatch) {
+    // === In Game ===
+    const inGameMatch = html.match(
+      /<b>В игре:<\/b>([\s\S]*?)(?=<b>Информация о сетевых|<b>Примечания|$)/i
+    )
+    if (inGameMatch && inGameMatch[1]) {
       result.inGameGuide = this.cleanText(inGameMatch[1])
     }
 
@@ -472,10 +477,10 @@ export default class OnlineFix {
       const $article = $('div[itemprop="articleBody"]')
       const rawText = $article.text().replace(/\s+/g, ' ').trim()
 
+      // Official servers from text
       const supportsOfficialServers =
-        /официальных серверах|official servers|play on official servers|официальные сервера/i.test(rawText);
-
-      details.supportsOfficialServers = supportsOfficialServers;
+        /официальных серверах|official servers|play on official servers|официальные сервера/i.test(rawText)
+      details.supportsOfficialServers = supportsOfficialServers
 
       // === Релиз игры ===
       const releaseMatch = rawText.match(/Релиз игры[:\s]*(\d{1,2}[.\\/]\d{1,2}[.\\/]\d{2,4})/i)
@@ -485,9 +490,8 @@ export default class OnlineFix {
       const storeMatch = rawText.match(/Игра через[:\s]*([A-Za-z ]+Store|[A-Za-z ]+)/i)
       if (storeMatch) details.gameStore = storeMatch[1].trim()
 
-      // === Clean sections with better line breaks ===
+      // === Sections ===
       const sections = this.extractSections($article)
-
       details.gameInfo = sections.gameInfo
       details.launchGuide = sections.launchGuide
       details.inGameGuide = sections.inGameGuide
@@ -499,21 +503,28 @@ export default class OnlineFix {
       if (coopMatch) details.coopPlayers = coopMatch[1]
       if (multiMatch) details.multiplayerPlayers = multiMatch[1]
 
-      // === Update info ===
-      const updateMatch = rawText.match(/Игра обновлена до версии[:\s]*([^\n<]+)/i)
-      if (updateMatch) {
-        details.updateInfo = `Игра обновлена до версии ${updateMatch[1].trim()}`
+      // === Update Info (clean - from .edited-block) ===
+      const $editedBlock = $('div.edited-block').first()
+      if ($editedBlock.length) {
+        details.updateInfo = $editedBlock.text().trim()
       }
 
-      console.log(`✅ Scraped successfully | Official servers: ${details.supportsOfficialServers}`)
+      console.log(`✅ Scraped successfully | Update: ${!!details.updateInfo}`)
       return details
 
     } catch (err) {
       console.error('Online-Fix error:', err.message)
       return {
-        releaseDate: null, gameStore: null, gameStoreLink: null,
-        gameInfo: null, launchGuide: null, inGameGuide: null, updateInfo: null,
-        videoUrl: null, coopPlayers: null, multiplayerPlayers: null,
+        releaseDate: null,
+        gameStore: null,
+        gameStoreLink: null,
+        gameInfo: null,
+        launchGuide: null,
+        inGameGuide: null,
+        updateInfo: null,
+        videoUrl: null,
+        coopPlayers: null,
+        multiplayerPlayers: null,
         supportsOfficialServers: false
       }
     }
