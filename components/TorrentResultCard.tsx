@@ -103,7 +103,7 @@ export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick
             )}
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 items-center">
             <Badge variant="outline" className={`text-xs ${getTrackerBadgeColor()}`}>
               {result.tracker}
             </Badge>
@@ -112,6 +112,11 @@ export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick
                 {result.author}
               </Badge>
             )}
+            {result.tags?.map((tag) => (
+              <Badge key={tag} variant="outline" className="text-xs border-border/60 text-muted-foreground">
+                {tag}
+              </Badge>
+            ))}
           </div>
         </div>
 

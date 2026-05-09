@@ -158,7 +158,7 @@ export default class RuTracker {
 
       $('.forumline tr').each((_, el) => {
         const titleEl = $(el).find('.tLink')
-        const title = titleEl.text().trim()
+        let title = titleEl.text().trim()
         const link = titleEl.attr('href')
 
         if (!title || !link) return
@@ -174,6 +174,21 @@ export default class RuTracker {
         const seedAmount = $(el).find('b.seedmed').text().trim()
         const leechAmount = $(el).find('td.leechmed').text().trim()
 
+        const spanTags = $(el).find('div.t-tags > span.tg')
+          .map((_, tg) => $(tg).text().trim())
+          .get()
+          .filter(Boolean)
+
+        const suffixTags = []
+        let suffixMatch
+        const trailingTagRegex = /\s*\[([^\]]+)\]\s*$/
+        while ((suffixMatch = title.match(trailingTagRegex))) {
+          suffixTags.unshift(suffixMatch[1].trim())
+          title = title.replace(trailingTagRegex, '').trim()
+        }
+
+        const tags = Array.from(new Set([...spanTags, ...suffixTags])).map(tag => tag.trim()).filter(Boolean)
+
         results.push({
           id: `rt-${id}`,
           name: title,
@@ -182,7 +197,8 @@ export default class RuTracker {
           author,
           tracker: 'RuTracker',
           seeds: seedAmount,
-          leeches: leechAmount
+          leeches: leechAmount,
+          tags
         })
       })
 

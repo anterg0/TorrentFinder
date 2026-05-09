@@ -9,4 +9,5 @@ export interface TorrentResult {
   url?: string
   seeds?: string
   leeches?: string
+  tags?: string[]
 }

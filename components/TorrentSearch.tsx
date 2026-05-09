@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Input } from './ui/input'
 import { Button } from './ui/button'
 import { motion, AnimatePresence } from 'motion/react'
@@ -133,10 +133,6 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
   const [details, setDetails] = useState<any>({})
   const [isLoadingDetails, setIsLoadingDetails] = useState(false)
   const hasFetchedRef = useRef(false)
-
-  const handleDownloadClick = (id: string, type: 'torrent' | 'repair' = 'torrent') => {
-    onDownloadClick(id, type)
-  }
 
   useEffect(() => {
     if (isOnlineFix && result.url && !hasFetchedRef.current) {
@@ -507,6 +503,7 @@ export function TorrentSearch() {
   const [results, setResults] = useState<TorrentResult[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [sortBy, setSortBy] = useState<SortOption>('name')
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [isFocused, setIsFocused] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -597,8 +594,26 @@ export function TorrentSearch() {
     }
   }, [searchQuery, hasSearched])
 
+  const availableTags = useMemo(
+    () => Array.from(new Set(results.flatMap((result) => result.tags || []))).sort((a, b) => a.localeCompare(b)),
+    [results]
+  )
+
+  const filteredResults = useMemo(() => {
+    if (selectedTags.length === 0) return results
+    return results.filter((result) => result.tags?.some((tag) => selectedTags.includes(tag)))
+  }, [results, selectedTags])
+
   const showResults = hasSearched || isLoading || error
-  const sortedResults = sortResults(results, sortBy)
+  const sortedResults = sortResults(filteredResults, sortBy)
+
+  const toggleTagFilter = (tag: string) => {
+    setSelectedTags((current) =>
+      current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]
+    )
+  }
+
+  const clearTagFilters = () => setSelectedTags([])
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
@@ -1094,24 +1109,52 @@ export function TorrentSearch() {
             className="fixed bottom-0 left-0 right-0 top-[180px] bg-background"
           >
             {results.length > 0 && !isLoading && !error && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 }}
-                className="flex gap-2 mb-4 pt-6 px-6 flex-wrap justify-center max-w-4xl mx-auto"
-              >
-                <span className="text-sm text-muted-foreground self-center mr-2">Sort by:</span>
-                {sortOptions.map((option) => (
-                  <Button
-                    key={option.key}
-                    variant={sortBy === option.key ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setSortBy(option.key)}
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                  className="flex gap-2 mb-4 pt-6 px-6 flex-wrap justify-center max-w-4xl mx-auto"
+                >
+                  <span className="text-sm text-muted-foreground self-center mr-2">Sort by:</span>
+                  {sortOptions.map((option) => (
+                    <Button
+                      key={option.key}
+                      variant={sortBy === option.key ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setSortBy(option.key)}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </motion.div>
+
+                {availableTags.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.4 }}
+                    className="flex flex-wrap gap-2 px-6 pb-4 justify-center max-w-4xl mx-auto"
                   >
-                    {option.label}
-                  </Button>
-                ))}
-              </motion.div>
+                    <span className="text-sm text-muted-foreground self-center mr-2">Filter tags:</span>
+                    {availableTags.map((tag) => (
+                      <Button
+                        key={tag}
+                        variant={selectedTags.includes(tag) ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => toggleTagFilter(tag)}
+                      >
+                        {tag}
+                      </Button>
+                    ))}
+                    {selectedTags.length > 0 && (
+                      <Button variant="secondary" size="sm" onClick={clearTagFilters}>
+                        Clear filters
+                      </Button>
+                    )}
+                  </motion.div>
+                )}
+              </>
             )}
 
             <div className="relative h-full">
