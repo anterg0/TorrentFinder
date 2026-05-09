@@ -1,4 +1,5 @@
-import { Download, Magnet, HardDrive, Clock, ArrowUp, ArrowDown, ExternalLink, Link2, Wrench } from 'lucide-react'
+import type { MouseEvent } from 'react'
+import { Download, Magnet, HardDrive, Clock, ArrowUp, ArrowDown, Link2, Wrench } from 'lucide-react'
 import { Button } from './ui/button'
 import { Badge } from './ui/badge'
 import { Card } from './ui/card'
@@ -12,18 +13,17 @@ interface TorrentResultCardProps {
   }
   isPlaceholder?: boolean
   onMagnetClick?: (id: string) => void
-  onDownloadClick?: (id: string) => void
+  onDownloadClick?: (id: string, type?: 'torrent' | 'repair') => void
+  onOpenDetails?: (result: TorrentResultCardProps['result']) => void
 }
 
-export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick, onDownloadClick }: TorrentResultCardProps) {
+export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick, onDownloadClick, onOpenDetails }: TorrentResultCardProps) {
   const isOnlineFix = result.tracker === 'Online-Fix'
-  const isRuTracker = result.tracker === 'RuTracker'
-  const isFreeTP = result.tracker === 'FreeTp'
 
-  const handleMagnetClick = () => {
+  const handleMagnetClick = (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
     if (!isPlaceholder) {
       if (isOnlineFix) {
-        // For Online-Fix, open the game page URL
         if (result.url) {
           window.open(result.url, '_blank')
         }
@@ -33,7 +33,8 @@ export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick
     }
   }
 
-  const handleDownloadClick = (type: 'torrent' | 'repair' = 'torrent') => {
+  const handleDownloadClick = (event: MouseEvent<HTMLButtonElement>, type: 'torrent' | 'repair' = 'torrent') => {
+    event.stopPropagation()
     if (!isPlaceholder) {
       if (isOnlineFix) {
         if (result.gameName && result.url) {
@@ -45,7 +46,7 @@ export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick
           window.location.href = `http://localhost:3001/api/download/${result.id}?${params.toString()}`
         }
       } else if (onDownloadClick) {
-        onDownloadClick(result.id)
+        onDownloadClick(result.id, type)
       }
     }
   }
@@ -64,7 +65,10 @@ export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick
   }
 
   return (
-    <Card className={`p-6 hover:bg-accent/50 transition-colors cursor-pointer group ${isPlaceholder ? 'opacity-70' : ''}`}>
+    <Card
+      onClick={() => !isPlaceholder && onOpenDetails?.(result)}
+      className={`p-6 hover:bg-accent/50 transition-colors cursor-pointer group ${isPlaceholder ? 'opacity-70' : ''}`}
+    >
       <div className="flex items-center justify-between gap-4">
         <div className="flex-1 min-w-0">
           <h3 className="mb-3 group-hover:text-primary transition-colors truncate text-lg">
@@ -123,25 +127,23 @@ export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick
             {isOnlineFix ? <Link2 className="w-4 h-4" /> : <Magnet className="w-4 h-4" />}
           </Button>
 
-          {/* NEW: Repair / Wrench button - only for Online-Fix */}
           {isOnlineFix && (
             <Button
               size="sm"
               className="rounded-none border-x border-primary-foreground/20 px-3"
               disabled={isPlaceholder || !result.gameName}
-              onClick={() => handleDownloadClick('repair')}
+              onClick={(event) => handleDownloadClick(event, 'repair')}
               title="Download Fix Repair (.rar)"
             >
               <Wrench className="w-4 h-4" />
             </Button>
           )}
 
-          {/* Download button */}
           <Button
             size="sm"
-            className={`${isOnlineFix ? 'rounded-l-none' : 'rounded-l-none'} px-3`}
+            className="rounded-l-none px-3"
             disabled={isPlaceholder || (isOnlineFix ? !result.gameName : !onDownloadClick)}
-            onClick={() => handleDownloadClick('torrent')}
+            onClick={(event) => handleDownloadClick(event, 'torrent')}
           >
             <Download className="w-4 h-4" />
           </Button>

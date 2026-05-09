@@ -154,6 +154,7 @@ app.get('/api/download/:id', async (req, res) => {
       } else {
         // existing torrent logic
         const file = await onlineFixClient.downloadTorrent(gameName, gameUrl)
+        console.log(file)
         res.setHeader('Content-Type', 'application/x-bittorrent')
         res.setHeader('Content-Disposition', `attachment; filename="${gameName}.torrent"`)
         return res.send(file)

@@ -97,8 +97,190 @@ async function getMagnetLink(id: string): Promise<string> {
   return res.data.magnet
 }
 
-function downloadTorrent(id: string) {
-  window.location.href = `http://localhost:3001/api/download/${id}`
+function downloadTorrent(id: string, type: 'torrent' | 'repair' = 'torrent') {
+  if (type === 'repair') {
+    window.location.href = `http://localhost:3001/api/download/${id}?type=repair`
+  } else {
+    window.location.href = `http://localhost:3001/api/download/${id}`
+  }
+}
+
+interface TorrentResultDetailsProps {
+  result: TorrentResult & { magnetLink?: string; url?: string; gameName?: string }
+  onClose: () => void
+  onMagnetClick: (id: string) => void
+  onDownloadClick: (id: string, type?: 'torrent' | 'repair') => void
+}
+
+function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick }: TorrentResultDetailsProps) {
+  const isOnlineFix = result.tracker === 'Online-Fix'
+  const title = result.gameName || result.name
+
+  return (
+    <motion.div
+      key="details-overlay"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-hidden"
+    >
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <motion.div
+        layoutId={`result-${result.id}`}
+        initial={{ opacity: 0, y: 24, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 24, scale: 0.98 }}
+        transition={{ duration: 0.25, ease: 'easeOut' }}
+        className="relative z-10 mx-4 my-8 flex w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-border/70 bg-card shadow-2xl"
+      >
+        <div className="flex flex-col gap-4 border-b border-border/60 bg-background/95 p-6 backdrop-blur-sm sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <span className="rounded-full border border-border/60 bg-accent px-3 py-1">{result.tracker}</span>
+              {result.author && <span className="rounded-full border border-border/60 bg-accent px-3 py-1">{result.author}</span>}
+            </div>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">{title}</h2>
+            <p className="text-sm text-muted-foreground line-clamp-2">{result.name}</p>
+          </div>
+
+          <Button variant="ghost" size="sm" onClick={onClose} className="self-start">
+            Back to results
+          </Button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="grid gap-6 lg:grid-cols-[1.4fr_0.9fr]">
+            <section className="space-y-5">
+              <div className="rounded-3xl border border-border/60 bg-background/80 p-5 shadow-sm">
+                <div className="mb-4 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Overview</p>
+                    <h3 className="mt-2 text-xl font-semibold text-foreground">Details</h3>
+                  </div>
+                  <div className="rounded-full bg-primary/5 px-3 py-1 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                    {isOnlineFix ? 'Guide' : 'Torrent'}
+                  </div>
+                </div>
+                <p className="text-sm leading-7 text-muted-foreground">
+                  {isOnlineFix
+                    ? 'Online-Fix results are styled as guided repair pages with version notes, Steam links and a dedicated fix download. This preview shows the expanded page layout from a selected result.'
+                    : 'This item is a torrent entry with metadata, seed/leech details, and direct actions for torrent download or magnet link.'}
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-3xl border border-border/60 bg-accent/40 p-5">
+                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Release date</p>
+                  <p className="mt-2 text-lg font-semibold text-foreground">{isOnlineFix ? '2025-03-18' : result.uploadDate || 'Unknown'}</p>
+                </div>
+                <div className="rounded-3xl border border-border/60 bg-accent/40 p-5">
+                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">File size</p>
+                  <p className="mt-2 text-lg font-semibold text-foreground">{result.size}</p>
+                </div>
+              </div>
+
+              <div className="space-y-3 rounded-3xl border border-border/60 bg-background/80 p-5">
+                <h3 className="text-lg font-semibold text-foreground">Description</h3>
+                <p className="text-sm leading-7 text-muted-foreground">
+                  {isOnlineFix
+                    ? 'This guide walks through a reliable repair and crack setup for the selected game. It includes a direct download for the fix archive, Steam page reference, release notes, and recommended installation steps.'
+                    : 'The torrent contains the selected release, including package contents and metadata. Use the buttons below to fetch the torrent file or open the magnet link in your preferred client.'}
+                </p>
+              </div>
+            </section>
+
+            <aside className="space-y-4 rounded-3xl border border-border/60 bg-background/80 p-5">
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Quick facts</p>
+                  <div className="mt-4 space-y-3 text-sm text-muted-foreground">
+                    <div className="flex justify-between gap-4">
+                      <span>Tracker</span>
+                      <span className="font-medium text-foreground">{result.tracker}</span>
+                    </div>
+                    {result.author && (
+                      <div className="flex justify-between gap-4">
+                        <span>Uploader</span>
+                        <span className="font-medium text-foreground">{result.author}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between gap-4">
+                      <span>Platform</span>
+                      <span className="font-medium text-foreground">Windows</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span>Status</span>
+                      <span className="font-medium text-foreground">Stable</span>
+                    </div>
+                    {result.url && (
+                      <div className="flex justify-between gap-4">
+                        <span>Page</span>
+                        <a
+                          href={result.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-medium text-primary hover:underline"
+                        >
+                          Open
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
+
+        <div className="border-t border-border/60 bg-background/95 p-6">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Button
+              variant={isOnlineFix ? 'default' : 'secondary'}
+              onClick={() => {
+                if (isOnlineFix && result.gameName && result.url) {
+                  const params = new URLSearchParams({
+                    gameName: result.gameName,
+                    gameUrl: result.url,
+                    type: 'repair'
+                  })
+                  window.location.href = `http://localhost:3001/api/download/${result.id}?${params.toString()}`
+                }
+              }}
+              disabled={!isOnlineFix || !result.gameName || !result.url}
+              className="min-h-[50px] whitespace-normal"
+            >
+              Download Fix Repair
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => onDownloadClick(result.id, 'torrent')}
+              className="min-h-[50px] whitespace-normal"
+            >
+              Download .torrent
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                if (result.url) window.open(result.url, '_blank')
+              }}
+              disabled={!result.url}
+              className="min-h-[50px] whitespace-normal"
+            >
+              Open Webpage
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => onMagnetClick(result.id)}
+              className="min-h-[50px] whitespace-normal"
+            >
+              Magnet Link
+            </Button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
 }
 
 export function TorrentSearch() {
@@ -128,6 +310,7 @@ export function TorrentSearch() {
   const [onlineFixPassword, setOnlineFixPassword] = useState('')
   const [onlineFixAuthLoading, setOnlineFixAuthLoading] = useState(false)
   const [onlineFixAuthError, setOnlineFixAuthError] = useState('')
+  const [selectedResult, setSelectedResult] = useState<TorrentResult | null>(null)
 
   // Sidebar and auth status state
   const [showSidebar, setShowSidebar] = useState(false)
@@ -163,8 +346,16 @@ export function TorrentSearch() {
     }
   }
 
-  const handleDownloadClick = (id: string) => {
-    downloadTorrent(id)
+  const handleDownloadClick = (id: string, type: 'torrent' | 'repair' = 'torrent') => {
+    downloadTorrent(id, type)
+  }
+
+  const handleOpenDetails = (result: TorrentResult) => {
+    setSelectedResult(result)
+  }
+
+  const handleCloseDetails = () => {
+    setSelectedResult(null)
   }
 
   // Clear results when search query is emptied
@@ -759,6 +950,8 @@ export function TorrentSearch() {
                         {sortedResults.map((result, index) => (
                           <motion.div
                             key={result.id}
+                            layout
+                            layoutId={`result-${result.id}`}
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.03 }}
@@ -768,6 +961,7 @@ export function TorrentSearch() {
                               isPlaceholder={false}
                               onMagnetClick={handleMagnetClick}
                               onDownloadClick={handleDownloadClick}
+                              onOpenDetails={handleOpenDetails}
                             />
                           </motion.div>
                         ))}
@@ -793,6 +987,17 @@ export function TorrentSearch() {
               <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-background to-transparent pointer-events-none" />
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {selectedResult && (
+          <TorrentResultDetails
+            result={selectedResult}
+            onClose={handleCloseDetails}
+            onMagnetClick={handleMagnetClick}
+            onDownloadClick={handleDownloadClick}
+          />
         )}
       </AnimatePresence>
     </div>
