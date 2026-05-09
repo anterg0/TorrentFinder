@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react'
-import { Download, Magnet, HardDrive, Clock, ArrowUp, ArrowDown, Link2, Wrench } from 'lucide-react'
+import { Download, Magnet, HardDrive, Clock, ArrowUp, ArrowDown, Link2, Wrench, ExternalLink } from 'lucide-react'
 import { Button } from './ui/button'
 import { Badge } from './ui/badge'
 import { Card } from './ui/card'
@@ -124,7 +124,7 @@ export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick
             disabled={isPlaceholder || (isOnlineFix ? !result.url : !onMagnetClick)}
             onClick={handleMagnetClick}
           >
-            {isOnlineFix ? <Link2 className="w-4 h-4" /> : <Magnet className="w-4 h-4" />}
+            {isOnlineFix ? <ExternalLink className="w-4 h-4" /> : <Magnet className="w-4 h-4" />}
           </Button>
 
           {isOnlineFix && (

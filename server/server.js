@@ -177,6 +177,32 @@ app.get('/api/download/:id', async (req, res) => {
   }
 })
 
+/* =========================
+   DETAILS
+========================= */
+
+app.get('/api/details/:id', async (req, res) => {
+  const id = req.params.id
+  const url = req.query.url
+
+  try {
+    let details = {}
+
+    if (id.startsWith('of-')) {
+      if (!url) {
+        return res.status(400).json({ 
+          error: 'Missing url parameter. Online-Fix details require the full page URL.' 
+        })
+      }
+      details = await onlineFixClient.getDetails(url)
+    }
+
+    res.json(details)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'OK',

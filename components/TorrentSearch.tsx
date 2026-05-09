@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Input } from './ui/input'
 import { Button } from './ui/button'
 import { motion, AnimatePresence } from 'motion/react'
 import { TorrentResultCard } from './TorrentResultCard'
 import { SettingsSidebar } from './SettingsSidebar'
 import { TorrentResult } from '../utils/torrentUtils'
-import { Search, User, Lock, X, Shield, Menu } from 'lucide-react'
+import { Search, User, Lock, X, Shield, Menu, ExternalLink, Download, Wrench } from 'lucide-react'
 import axios from 'axios'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 
 export type SortOption = 'name' | 'size' | 'date'
 
@@ -106,7 +108,19 @@ function downloadTorrent(id: string, type: 'torrent' | 'repair' = 'torrent') {
 }
 
 interface TorrentResultDetailsProps {
-  result: TorrentResult & { magnetLink?: string; url?: string; gameName?: string }
+  result: TorrentResult & {
+    magnetLink?: string
+    url?: string
+    gameName?: string
+    // Online-Fix specific fields
+    releaseDate?: string
+    gameStore?: string
+    gameStoreLink?: string
+    gameInfo?: string
+    launchGuide?: string
+    inGameGuide?: string
+    updateInfo?: string
+  }
   onClose: () => void
   onMagnetClick: (id: string) => void
   onDownloadClick: (id: string, type?: 'torrent' | 'repair') => void
@@ -116,166 +130,305 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
   const isOnlineFix = result.tracker === 'Online-Fix'
   const title = result.gameName || result.name
 
+  const [launchGuideOpen, setLaunchGuideOpen] = useState(false)
+  const [inGameGuideOpen, setInGameGuideOpen] = useState(false)
+  const [details, setDetails] = useState<any>({})
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false)
+  const hasFetchedRef = useRef(false)
+
+  useEffect(() => {
+    if (isOnlineFix && result.url && !hasFetchedRef.current) {
+      hasFetchedRef.current = true
+      setIsLoadingDetails(true)
+
+      const params = new URLSearchParams({ url: result.url })
+
+      axios.get(`http://localhost:3001/api/details/${result.id}?${params.toString()}`)
+        .then(response => {
+          setDetails(response.data || {})
+        })
+        .catch(err => {
+          console.error('Failed to fetch Online-Fix details:', err)
+          setDetails({})
+        })
+        .finally(() => {
+          setIsLoadingDetails(false)
+        })
+    }
+  }, [isOnlineFix, result.id, result.url])   // stable dependencies only
+
+  // Merge the result with fetched details
+  const enrichedResult = { ...result, ...details }
+
   return (
     <motion.div
       key="details-overlay"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.18 }}
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       className="fixed inset-0 z-50 flex items-start justify-center overflow-hidden"
     >
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+
       <motion.div
-        layoutId={`result-${result.id}`}
-        initial={{ opacity: 0, y: 24, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 24, scale: 0.98 }}
-        transition={{ duration: 0.25, ease: 'easeOut' }}
-        className="relative z-10 mx-4 my-8 flex w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-border/70 bg-card shadow-2xl"
+        initial={{ opacity: 0, scale: 0.9, y: 40 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+        className="relative z-10 mx-4 my-8 flex w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-border/70 bg-card shadow-2xl max-h-[92vh]"
       >
-        <div className="flex flex-col gap-4 border-b border-border/60 bg-background/95 p-6 backdrop-blur-sm sm:flex-row sm:items-start sm:justify-between">
+        {/* Header */}
+        <div className="flex flex-col gap-4 border-b border-border/60 bg-background/95 p-6 backdrop-blur-sm sm:flex-row sm:items-start sm:justify-between flex-shrink-0">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <span className="rounded-full border border-border/60 bg-accent px-3 py-1">{result.tracker}</span>
-              {result.author && <span className="rounded-full border border-border/60 bg-accent px-3 py-1">{result.author}</span>}
+              {!isOnlineFix && result.author && result.author !== 'Unknown' && (
+                <span className="rounded-full border border-border/60 bg-accent px-3 py-1">{result.author}</span>
+              )}
             </div>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">{title}</h2>
             <p className="text-sm text-muted-foreground line-clamp-2">{result.name}</p>
           </div>
 
-          <Button variant="ghost" size="sm" onClick={onClose} className="self-start">
+          <Button variant="ghost" size="sm" onClick={onClose} className="self-start whiteText">
             Back to results
           </Button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Scrollable Content Area */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 min-h-0">
           <div className="grid gap-6 lg:grid-cols-[1.4fr_0.9fr]">
             <section className="space-y-5">
-              <div className="rounded-3xl border border-border/60 bg-background/80 p-5 shadow-sm">
-                <div className="mb-4 flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Overview</p>
-                    <h3 className="mt-2 text-xl font-semibold text-foreground">Details</h3>
-                  </div>
-                  <div className="rounded-full bg-primary/5 px-3 py-1 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                    {isOnlineFix ? 'Guide' : 'Torrent'}
-                  </div>
+              {/* Video Showcase */}
+              {isOnlineFix && enrichedResult.videoUrl && (
+                <div className="rounded-3xl overflow-hidden border border-border/60 bg-black aspect-video">
+                  <iframe
+                    src={enrichedResult.videoUrl}
+                    className="w-full h-full"
+                    allowFullScreen
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  />
                 </div>
-                <p className="text-sm leading-7 text-muted-foreground">
-                  {isOnlineFix
-                    ? 'Online-Fix results are styled as guided repair pages with version notes, Steam links and a dedicated fix download. This preview shows the expanded page layout from a selected result.'
-                    : 'This item is a torrent entry with metadata, seed/leech details, and direct actions for torrent download or magnet link.'}
-                </p>
-              </div>
+              )}
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-3xl border border-border/60 bg-accent/40 p-5">
-                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Release date</p>
-                  <p className="mt-2 text-lg font-semibold text-foreground">{isOnlineFix ? '2025-03-18' : result.uploadDate || 'Unknown'}</p>
-                </div>
-                <div className="rounded-3xl border border-border/60 bg-accent/40 p-5">
-                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">File size</p>
-                  <p className="mt-2 text-lg font-semibold text-foreground">{result.size}</p>
-                </div>
-              </div>
+              {/* Online-Fix Content */}
+              {isOnlineFix ? (
+                <div className="space-y-4">
+                  {enrichedResult.releaseDate && (
+                    <div className="rounded-3xl border border-border/60 bg-accent/40 p-5">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Релиз игры</p>
+                      <p className="mt-2 text-lg font-semibold text-foreground">{enrichedResult.releaseDate}</p>
+                    </div>
+                  )}
 
-              <div className="space-y-3 rounded-3xl border border-border/60 bg-background/80 p-5">
-                <h3 className="text-lg font-semibold text-foreground">Description</h3>
-                <p className="text-sm leading-7 text-muted-foreground">
-                  {isOnlineFix
-                    ? 'This guide walks through a reliable repair and crack setup for the selected game. It includes a direct download for the fix archive, Steam page reference, release notes, and recommended installation steps.'
-                    : 'The torrent contains the selected release, including package contents and metadata. Use the buttons below to fetch the torrent file or open the magnet link in your preferred client.'}
-                </p>
-              </div>
+                  {enrichedResult.gameStore && (
+                    <div className="rounded-3xl border border-border/60 bg-accent/40 p-5">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Игра через</p>
+                      <p className="mt-2 text-lg font-semibold text-foreground">{enrichedResult.gameStore}</p>
+                    </div>
+                  )}
+
+                  {enrichedResult.gameInfo && (
+                    <div className="space-y-3 rounded-3xl border border-border/60 bg-background/80 p-5">
+                      <h3 className="text-lg font-semibold text-foreground">Информация о игре</h3>
+                      <p className="text-sm leading-7 text-muted-foreground whitespace-pre-line">
+                        {enrichedResult.gameInfo}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Как запускать - Always visible */}
+                  {enrichedResult.launchGuide && (
+                    <div className="space-y-3 rounded-3xl border border-border/60 bg-background/80 p-5">
+                      <h3 className="text-lg font-semibold text-foreground">Как запускать</h3>
+                      <p className="text-sm leading-7 text-muted-foreground whitespace-pre-line">
+                        {enrichedResult.launchGuide}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* В игре - Always visible */}
+                  {enrichedResult.inGameGuide && (
+                    <div className="space-y-3 rounded-3xl border border-border/60 bg-background/80 p-5">
+                      <h3 className="text-lg font-semibold text-foreground">В игре</h3>
+                      <p className="text-sm leading-7 text-muted-foreground whitespace-pre-line">
+                        {enrichedResult.inGameGuide}
+                      </p>
+                    </div>
+                  )}
+
+                  {enrichedResult.updateInfo && (
+                    <div className="rounded-3xl border border-border/60 bg-yellow-500/10 p-5">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Обновлено</p>
+                      <p className="mt-2 text-sm text-muted-foreground">{enrichedResult.updateInfo}</p>
+                    </div>
+                  )}
+                  {/* Network Modes - Separate sections */}
+                  {(enrichedResult.supportsOfficialServers ||
+                    (enrichedResult.coopPlayers && parseInt(enrichedResult.coopPlayers) > 0) ||
+                    (enrichedResult.multiplayerPlayers && parseInt(enrichedResult.multiplayerPlayers) > 0)) && (
+
+                      <div className="space-y-3">
+
+                        {/* Official Servers - Separate */}
+                        {enrichedResult.supportsOfficialServers && (
+                          <div className="rounded-3xl border border-green-500/30 bg-green-500/10 px-5 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500">
+                                <span className="text-sm font-bold text-white">✓</span>
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-green-400">Official Servers Supported</p>
+                                <p className="text-xs text-muted-foreground">You can play on official servers</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* COOP + MULTIPLAYER - Separate cards with blue background if > 0 players */}
+                        {(enrichedResult.coopPlayers || enrichedResult.multiplayerPlayers) && (
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+                            {/* COOP */}
+                            {enrichedResult.coopPlayers && (
+                              <div className={`rounded-3xl px-5 py-4 transition-colors ${parseInt(enrichedResult.coopPlayers) > 0
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-accent/40 text-foreground'
+                                }`}>
+                                <div className="flex items-baseline justify-between">
+                                  <div>
+                                    <p className={`text-xs uppercase tracking-[0.2em] ${parseInt(enrichedResult.coopPlayers) > 0 ? 'text-blue-200' : 'text-muted-foreground'
+                                      }`}>
+                                      COOPERATIVE
+                                    </p>
+                                    <p className="mt-1 text-3xl font-semibold">
+                                      {enrichedResult.coopPlayers}
+                                    </p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className={`text-sm ${parseInt(enrichedResult.coopPlayers) > 0 ? 'text-blue-200' : 'text-muted-foreground'
+                                      }`}>players</p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* MULTIPLAYER */}
+                            {enrichedResult.multiplayerPlayers && (
+                              <div className={`rounded-3xl px-5 py-4 transition-colors ${parseInt(enrichedResult.multiplayerPlayers) > 0
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-accent/40 text-foreground'
+                                }`}>
+                                <div className="flex items-baseline justify-between">
+                                  <div>
+                                    <p className={`text-xs uppercase tracking-[0.2em] ${parseInt(enrichedResult.multiplayerPlayers) > 0 ? 'text-blue-200' : 'text-muted-foreground'
+                                      }`}>
+                                      MULTIPLAYER
+                                    </p>
+                                    <p className="mt-1 text-3xl font-semibold">
+                                      {enrichedResult.multiplayerPlayers}
+                                    </p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className={`text-sm ${parseInt(enrichedResult.multiplayerPlayers) > 0 ? 'text-blue-200' : 'text-muted-foreground'
+                                      }`}>players</p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                </div>
+              ) : (
+                // RuTracker/FreeTP content
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-3xl border border-border/60 bg-accent/40 p-5">
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Release date</p>
+                    <p className="mt-2 text-lg font-semibold text-foreground">{result.uploadDate || 'Unknown'}</p>
+                  </div>
+                  <div className="rounded-3xl border border-border/60 bg-accent/40 p-5">
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">File size</p>
+                    <p className="mt-2 text-lg font-semibold text-foreground">{result.size}</p>
+                  </div>
+                </div>
+              )}
+
+              {!isOnlineFix && (
+                <div className="space-y-3 rounded-3xl border border-border/60 bg-background/80 p-5">
+                  <h3 className="text-lg font-semibold text-foreground">Description</h3>
+                  <p className="text-sm leading-7 text-muted-foreground">
+                    The torrent contains the selected release, including package contents and metadata. Use the buttons below to fetch the torrent file or open the magnet link in your preferred client.
+                  </p>
+                </div>
+              )}
             </section>
-
-            <aside className="space-y-4 rounded-3xl border border-border/60 bg-background/80 p-5">
-              <div className="space-y-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Quick facts</p>
-                  <div className="mt-4 space-y-3 text-sm text-muted-foreground">
-                    <div className="flex justify-between gap-4">
-                      <span>Tracker</span>
-                      <span className="font-medium text-foreground">{result.tracker}</span>
-                    </div>
-                    {result.author && (
-                      <div className="flex justify-between gap-4">
-                        <span>Uploader</span>
-                        <span className="font-medium text-foreground">{result.author}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between gap-4">
-                      <span>Platform</span>
-                      <span className="font-medium text-foreground">Windows</span>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <span>Status</span>
-                      <span className="font-medium text-foreground">Stable</span>
-                    </div>
-                    {result.url && (
-                      <div className="flex justify-between gap-4">
-                        <span>Page</span>
-                        <a
-                          href={result.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-medium text-primary hover:underline"
-                        >
-                          Open
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </aside>
           </div>
         </div>
 
-        <div className="border-t border-border/60 bg-background/95 p-6">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Button
-              variant={isOnlineFix ? 'default' : 'secondary'}
-              onClick={() => {
-                if (isOnlineFix && result.gameName && result.url) {
-                  const params = new URLSearchParams({
-                    gameName: result.gameName,
-                    gameUrl: result.url,
-                    type: 'repair'
-                  })
-                  window.location.href = `http://localhost:3001/api/download/${result.id}?${params.toString()}`
-                }
-              }}
-              disabled={!isOnlineFix || !result.gameName || !result.url}
-              className="min-h-[50px] whitespace-normal"
-            >
-              Download Fix Repair
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => onDownloadClick(result.id, 'torrent')}
-              className="min-h-[50px] whitespace-normal"
-            >
-              Download .torrent
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                if (result.url) window.open(result.url, '_blank')
-              }}
-              disabled={!result.url}
-              className="min-h-[50px] whitespace-normal"
-            >
-              Open Webpage
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => onMagnetClick(result.id)}
-              className="min-h-[50px] whitespace-normal"
-            >
-              Magnet Link
-            </Button>
+        {/* Footer Buttons */}
+        <div className="border-t border-border/60 bg-background/95 p-6 flex-shrink-0">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {isOnlineFix ? (
+              <>
+                <Button
+                  onClick={() => {
+                    if (enrichedResult.gameName && enrichedResult.url) {
+                      const params = new URLSearchParams({
+                        gameName: enrichedResult.gameName,
+                        gameUrl: enrichedResult.url,
+                        type: 'repair'
+                      })
+                      window.location.href = `http://localhost:3001/api/download/${enrichedResult.id}?${params.toString()}`
+                    }
+                  }}
+                  disabled={!enrichedResult.gameName || !enrichedResult.url}
+                  className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2"
+                >
+                  <Wrench className="h-4 w-4" />
+                  Download Fix Repair
+                </Button>
+
+                <Button
+                  onClick={() => onDownloadClick(enrichedResult.id, 'torrent')}
+                  className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Download .torrent
+                </Button>
+
+                <Button
+                  onClick={() => {
+                    if (enrichedResult.url) window.open(enrichedResult.url, '_blank')
+                  }}
+                  disabled={!enrichedResult.url}
+                  className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Open Webpage
+                </Button>
+              </>
+            ) : (
+              // Normal torrent buttons
+              <>
+                <Button
+                  onClick={() => onDownloadClick(enrichedResult.id, 'torrent')}
+                  className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Download .torrent
+                </Button>
+                <Button
+                  onClick={() => onMagnetClick(enrichedResult.id)}
+                  className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Magnet Link
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </motion.div>
@@ -303,7 +456,7 @@ export function TorrentSearch() {
   const [captchaImageLoaded, setCaptchaImageLoaded] = useState(false)
   const [captchaError, setCaptchaError] = useState('')
   const [captchaImageSrc, setCaptchaImageSrc] = useState('/api/captcha')
-  
+
   // Online-Fix auth modal state
   const [showOnlineFixAuthModal, setShowOnlineFixAuthModal] = useState(false)
   const [onlineFixUsername, setOnlineFixUsername] = useState('')
@@ -346,16 +499,28 @@ export function TorrentSearch() {
     }
   }
 
-  const handleDownloadClick = (id: string, type: 'torrent' | 'repair' = 'torrent') => {
-    downloadTorrent(id, type)
-  }
-
   const handleOpenDetails = (result: TorrentResult) => {
     setSelectedResult(result)
   }
 
   const handleCloseDetails = () => {
     setSelectedResult(null)
+  }
+
+  const handleDownloadClick = (id: string, type: 'torrent' | 'repair' = 'torrent') => {
+    downloadTorrent(id, type)
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value)
+  }
+
+  const handleFocus = () => {
+    setIsFocused(true)
+  }
+
+  const handleBlur = () => {
+    setIsFocused(false)
   }
 
   // Clear results when search query is emptied
@@ -365,6 +530,9 @@ export function TorrentSearch() {
       setHasSearched(false)
     }
   }, [searchQuery, hasSearched])
+
+  const showResults = hasSearched || isLoading || error
+  const sortedResults = sortResults(results, sortBy)
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
@@ -437,7 +605,7 @@ export function TorrentSearch() {
       await axios.post(`http://localhost:3001/api/logout/${service}`, {}, {
         timeout: 5000
       })
-      
+
       if (service === 'rutracker') {
         setRuTrackerAuth(false)
       } else if (service === 'onlinefix') {
@@ -462,7 +630,7 @@ export function TorrentSearch() {
       }, {
         timeout: 30000
       })
-      
+
       if (response.data.success) {
         setShowOnlineFixAuthModal(false)
         setOnlineFixUsername('')
@@ -472,7 +640,7 @@ export function TorrentSearch() {
         setOnlineFixAuthError('Login failed. Please check your credentials.')
       }
     } catch (error) {
-      const errorMsg = axios.isAxiosError(error) 
+      const errorMsg = axios.isAxiosError(error)
         ? error.response?.data?.error || 'Network error'
         : 'Network error. Check server.'
       setOnlineFixAuthError(errorMsg)
@@ -480,30 +648,6 @@ export function TorrentSearch() {
       setOnlineFixAuthLoading(false)
     }
   }
-
-
-
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value)
-    if (e.target.value.trim()) {
-      setError(null)
-    }
-  }
-
-  const handleFocus = () => {
-    setIsFocused(true)
-  }
-
-  const handleBlur = () => {
-    if (!searchQuery.trim() && !hasSearched) {
-      setIsFocused(false)
-    }
-  }
-
-  const displayResults = results
-  const sortedResults = sortResults(displayResults, sortBy)
-  const showResults = hasSearched
 
   return (
     <div className="min-h-screen bg-background overflow-hidden">
@@ -818,7 +962,7 @@ export function TorrentSearch() {
           transition={{ duration: 0.6, ease: "easeInOut" }}
           className="text-muted-foreground max-w-2xl mx-auto px-6"
         >
-          Search RuTracker.org, Online-Fix.me and FreeTP.org<br/>for torrents using real-time web scraping
+          Search RuTracker.org, Online-Fix.me and FreeTP.org<br />for torrents using real-time web scraping
         </motion.p>
       </div>
 
@@ -951,7 +1095,6 @@ export function TorrentSearch() {
                           <motion.div
                             key={result.id}
                             layout
-                            layoutId={`result-${result.id}`}
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.03 }}

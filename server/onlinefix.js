@@ -76,6 +76,46 @@ export default class OnlineFix {
     }
   }
 
+  extractSections($article) {
+    const result = { gameInfo: null, launchGuide: null, inGameGuide: null }
+
+    // Get raw HTML of the article body
+    const html = $article.html() || ''
+
+    // Split by known bold headers
+    const parts = html.split(/<b>Как запускать:<\/b>|<b>В игре:<\/b>|<b>Информация о игре:<\/b>/i)
+
+    if (parts.length >= 2) {
+      // Game Info
+      if (parts[1]) {
+        result.gameInfo = this.cleanText(parts[1].split(/<b>Как запускать:<\/b>/i)[0])
+      }
+    }
+
+    // Launch Guide
+    const launchMatch = html.match(/<b>Как запускать:<\/b>([\s\S]*?)(?=<b>В игре:<\/b>|$)/i)
+    if (launchMatch) {
+      result.launchGuide = this.cleanText(launchMatch[1])
+    }
+
+    // In Game
+    const inGameMatch = html.match(/<b>В игре:<\/b>([\s\S]*?)(?=<b>Информация о сетевых|$)/i)
+    if (inGameMatch) {
+      result.inGameGuide = this.cleanText(inGameMatch[1])
+    }
+
+    return result
+  }
+
+  cleanText(html) {
+    return html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/?[^>]+(>|$)/g, '')           // remove tags
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+
   /* =========================
      COOKIE HANDLING
   ========================= */
@@ -380,6 +420,97 @@ export default class OnlineFix {
     } catch (err) {
       console.error('Online-Fix repair download error:', err.message)
       throw err
+    }
+  }
+
+  /* =========================
+     DETAILS SCRAPING
+  ========================= */
+
+  async getDetails(url) {
+    try {
+      console.log(`🔍 Scraping Online-Fix: ${url}`)
+
+      const res = await this.client.get(url, {
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Referer': 'https://online-fix.me/'
+        }
+      })
+
+      const html = this.decodeResponse(res.data, res.headers['content-type'])
+      const $ = cheerio.load(html, { decodeEntities: false })
+
+      const details = {
+        releaseDate: null,
+        gameStore: null,
+        gameStoreLink: null,
+        gameInfo: null,
+        launchGuide: null,
+        inGameGuide: null,
+        updateInfo: null,
+        videoUrl: null,
+        coopPlayers: null,
+        multiplayerPlayers: null,
+        supportsOfficialServers: false
+      }
+
+      // Detect official servers from URL
+      if (url.includes('/officialservers/')) {
+        details.supportsOfficialServers = true
+      }
+
+      // === Video ===
+      const $video = $('iframe[src*="youtube-nocookie.com/embed"], iframe[src*="youtube.com/embed"]').first()
+      if ($video.length) {
+        let src = $video.attr('src')
+        if (src.includes('&')) src = src.split('&')[0]
+        details.videoUrl = src
+      }
+
+      // Get main content
+      const $article = $('div[itemprop="articleBody"]')
+      const rawText = $article.text().replace(/\s+/g, ' ').trim()
+
+      // === Релиз игры ===
+      const releaseMatch = rawText.match(/Релиз игры[:\s]*(\d{1,2}[.\\/]\d{1,2}[.\\/]\d{2,4})/i)
+      if (releaseMatch) details.releaseDate = releaseMatch[1].trim()
+
+      // === Игра через ===
+      const storeMatch = rawText.match(/Игра через[:\s]*([A-Za-z ]+Store|[A-Za-z ]+)/i)
+      if (storeMatch) details.gameStore = storeMatch[1].trim()
+
+      // === Clean sections with better line breaks ===
+      const sections = this.extractSections($article)
+
+      details.gameInfo = sections.gameInfo
+      details.launchGuide = sections.launchGuide
+      details.inGameGuide = sections.inGameGuide
+
+      // === Network modes (COOP / MULTIPLAYER) ===
+      const coopMatch = rawText.match(/КООПЕРАТИВ[:\s]*(\d+)/i)
+      const multiMatch = rawText.match(/МУЛЬТИПЛЕЕР[:\s]*(\d+)/i)
+
+      if (coopMatch) details.coopPlayers = coopMatch[1]
+      if (multiMatch) details.multiplayerPlayers = multiMatch[1]
+
+      // === Update info ===
+      const updateMatch = rawText.match(/Игра обновлена до версии[:\s]*([^\n<]+)/i)
+      if (updateMatch) {
+        details.updateInfo = `Игра обновлена до версии ${updateMatch[1].trim()}`
+      }
+
+      console.log(`✅ Scraped successfully | Official servers: ${details.supportsOfficialServers}`)
+      return details
+
+    } catch (err) {
+      console.error('Online-Fix error:', err.message)
+      return {
+        releaseDate: null, gameStore: null, gameStoreLink: null,
+        gameInfo: null, launchGuide: null, inGameGuide: null, updateInfo: null,
+        videoUrl: null, coopPlayers: null, multiplayerPlayers: null,
+        supportsOfficialServers: false
+      }
     }
   }
 }
