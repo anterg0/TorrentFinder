@@ -10,42 +10,48 @@ import { Search, User, Lock, X, Shield, Menu, ExternalLink, Download, Wrench, Ar
 import axios from 'axios'
 // Collapsible components removed (not used) - kept UI simple
 
-export type SortOption = 'name' | 'size' | 'date'
+export type SortOption = 'name' | 'size' | 'date' | 'seeds'
 export type SortDirection = 'asc' | 'desc'
 
 export const sortOptions = [
   { key: 'name' as const, label: 'Name' },
   { key: 'size' as const, label: 'Size' },
-  { key: 'date' as const, label: 'Date' }
+  { key: 'date' as const, label: 'Date' },
+  { key: 'seeds' as const, label: 'Seeds'}
 ]
 
 export function sortResults(results: TorrentResult[], sortBy: SortOption, direction: SortDirection = 'desc'): TorrentResult[] {
   const sorted = [...results].sort((a, b) => {
-    let comparison = 0
+    let comparison = 0;
     switch (sortBy) {
       case 'name':
-        comparison = a.name.localeCompare(b.name)
-        break
+        comparison = a.name.localeCompare(b.name);
+        break;
       case 'size':
-        const parseSize = (sizeStr: string) => {
-          const match = sizeStr.match(/(\d+\.?\d*)\s*(GB|MB|KB|TB)/i)
-          if (!match) return 0
-          const size = parseFloat(match[1])
-          const unit = match[2].toUpperCase() as keyof typeof multipliers
-          const multipliers = { KB: 1, MB: 1024, GB: 1024 * 1024, TB: 1024 * 1024 * 1024 }
-          return size * (multipliers[unit] || 0)
-        }
-        comparison = parseSize(b.size) - parseSize(a.size)
-        break
+        const parseSize = (sizeStr: string): number => {
+          const match = sizeStr.match(/(\d+\.?\d*)\s*(GB|MB|KB|TB)/i);
+          if (!match) return 0;
+          const size = parseFloat(match[1]);
+          const unit = match[2].toUpperCase() as keyof typeof multipliers;
+          const multipliers = { KB: 1, MB: 1024, GB: 1024 * 1024, TB: 1024 * 1024 * 1024 };
+          return size * (multipliers[unit] || 0);
+        };
+        comparison = parseSize(b.size) - parseSize(a.size);
+        break;
       case 'date':
-        comparison = new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
-        break
+        comparison = new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime();
+        break;
+      case 'seeds':
+        const seedsA = parseInt(a.seeds || '0', 10);
+        const seedsB = parseInt(b.seeds || '0', 10);
+        comparison = seedsA - seedsB; // Note the difference here
+        break;
       default:
-        comparison = 0
+        comparison = 0;
     }
-    return direction === 'asc' ? -comparison : comparison
-  })
-  return sorted
+    return direction === 'asc' ? comparison : -comparison;
+  });
+  return sorted;
 }
 
 // Updated search function with auth awareness
@@ -1171,7 +1177,7 @@ export function TorrentSearch() {
                   />
 
                   <span className="text-sm text-muted-foreground">Sort by:</span>
-                  
+
                   {/* Sort Direction Toggle */}
                   <Button
                     variant="outline"
