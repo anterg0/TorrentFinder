@@ -5,6 +5,7 @@ import { TextDecoder } from 'util'
 
 import { CookieJar } from 'tough-cookie'
 import { wrapper } from 'axios-cookiejar-support'
+import { enrichResultWithTags, parseTagsFromTitle } from "../utils/torrentUtils.ts"
 
 export default class RuTracker {
   constructor() {
@@ -94,6 +95,7 @@ export default class RuTracker {
           },
           responseType: 'arraybuffer'
         }))
+
         console.log('✅ RuTracker cookies loaded')
       } catch (err) {
         console.error('⚠️ Failed to load RuTracker cookies:', err.message)
@@ -147,7 +149,7 @@ export default class RuTracker {
   async search(query) {
     try {
       const res = await this.client.get(`tracker.php?nm=${encodeURIComponent(query)}`)
-      
+
       const contentType = res.headers['content-type'] || ''
       this.debugLog('Search Response', res.data, contentType)
 
@@ -174,20 +176,53 @@ export default class RuTracker {
         const seedAmount = $(el).find('b.seedmed').text().trim()
         const leechAmount = $(el).find('td.leechmed').text().trim()
 
-        const spanTags = $(el).find('div.t-tags > span.tg')
-          .map((_, tg) => $(tg).text().trim())
-          .get()
-          .filter(Boolean)
+        let extractedTags = [];
 
-        const suffixTags = []
-        let suffixMatch
-        const trailingTagRegex = /\s*\[([^\]]+)\]\s*$/
-        while ((suffixMatch = title.match(trailingTagRegex))) {
-          suffixTags.unshift(suffixMatch[1].trim())
-          title = title.replace(trailingTagRegex, '').trim()
+        // Remove ALL leading [] and () tags
+        while (true) {
+          const prefixMatch = title.match(
+            /^\s*(\[[^\]]*]|\([^)]+\))\s*/
+          );
+
+          if (!prefixMatch) break;
+
+          title = title
+            .slice(prefixMatch[0].length)
+            .trim();
         }
 
-        const tags = Array.from(new Set([...spanTags, ...suffixTags])).map(tag => tag.trim()).filter(Boolean)
+        // Only allowed suffix tags
+        const VALID_RELEASE_TAGS = [
+          'portable',
+          'gog',
+          'p2p',
+          'scene',
+          'steam-rip',
+          'steamrip',
+          'repack',
+          'rip'
+        ];
+
+        // ONLY the final [...] in the string
+        const suffixMatch = title.match(
+          /\[([^\]]+)\]\s*$/
+        );
+
+        if (suffixMatch) {
+          const suffix = suffixMatch[1].trim();
+
+          if (
+            VALID_RELEASE_TAGS.includes(
+              suffix.toLowerCase()
+            )
+          ) {
+            extractedTags.push(suffix);
+
+            title = title
+              .slice(0, suffixMatch.index)
+              .trim();
+          }
+        }
 
         results.push({
           id: `rt-${id}`,
@@ -198,7 +233,7 @@ export default class RuTracker {
           tracker: 'RuTracker',
           seeds: seedAmount,
           leeches: leechAmount,
-          tags
+          tags: extractedTags.flat()
         })
       })
 

@@ -107,7 +107,7 @@ export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick
             <Badge variant="outline" className={`text-xs ${getTrackerBadgeColor()}`}>
               {result.tracker}
             </Badge>
-            {result.author && result.author !== 'Unknown' && (
+            {result.author && !isOnlineFix && result.author !== 'Unknown' && (
               <Badge variant="secondary" className="text-xs">
                 {result.author}
               </Badge>
