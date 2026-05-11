@@ -4,12 +4,14 @@ import { Button } from './ui/button'
 import { motion, AnimatePresence } from 'motion/react'
 import { TorrentResultCard } from './TorrentResultCard'
 import { SettingsSidebar } from './SettingsSidebar'
-import { TorrentResult } from '../utils/torrentUtils'
-import { Search, User, Lock, X, Shield, Menu, ExternalLink, Download, Wrench } from 'lucide-react'
+import { FilterPanel } from './FilterPanel'
+import { TorrentResult, enrichResultWithTags } from '../utils/torrentUtils'
+import { Search, User, Lock, X, Shield, Menu, ExternalLink, Download, Wrench, ArrowUp, ArrowDown } from 'lucide-react'
 import axios from 'axios'
 // Collapsible components removed (not used) - kept UI simple
 
 export type SortOption = 'name' | 'size' | 'date'
+export type SortDirection = 'asc' | 'desc'
 
 export const sortOptions = [
   { key: 'name' as const, label: 'Name' },
@@ -17,11 +19,13 @@ export const sortOptions = [
   { key: 'date' as const, label: 'Date' }
 ]
 
-export function sortResults(results: TorrentResult[], sortBy: SortOption): TorrentResult[] {
-  return [...results].sort((a, b) => {
+export function sortResults(results: TorrentResult[], sortBy: SortOption, direction: SortDirection = 'desc'): TorrentResult[] {
+  const sorted = [...results].sort((a, b) => {
+    let comparison = 0
     switch (sortBy) {
       case 'name':
-        return a.name.localeCompare(b.name)
+        comparison = a.name.localeCompare(b.name)
+        break
       case 'size':
         const parseSize = (sizeStr: string) => {
           const match = sizeStr.match(/(\d+\.?\d*)\s*(GB|MB|KB|TB)/i)
@@ -31,13 +35,17 @@ export function sortResults(results: TorrentResult[], sortBy: SortOption): Torre
           const multipliers = { KB: 1, MB: 1024, GB: 1024 * 1024, TB: 1024 * 1024 * 1024 }
           return size * (multipliers[unit] || 0)
         }
-        return parseSize(b.size) - parseSize(a.size)
+        comparison = parseSize(b.size) - parseSize(a.size)
+        break
       case 'date':
-        return new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
+        comparison = new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
+        break
       default:
-        return 0
+        comparison = 0
     }
+    return direction === 'asc' ? -comparison : comparison
   })
+  return sorted
 }
 
 // Updated search function with auth awareness
@@ -503,7 +511,9 @@ export function TorrentSearch() {
   const [results, setResults] = useState<TorrentResult[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [sortBy, setSortBy] = useState<SortOption>('name')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedTrackers, setSelectedTrackers] = useState<string[]>([])
   const [isFocused, setIsFocused] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -599,13 +609,32 @@ export function TorrentSearch() {
     [results]
   )
 
+  const availableTrackers = useMemo(() => {
+    const trackerCounts = results.reduce((acc, result) => {
+      acc[result.tracker] = (acc[result.tracker] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+    return Object.entries(trackerCounts).map(([name, count]) => ({ name, count })).sort()
+  }, [results])
+
   const filteredResults = useMemo(() => {
-    if (selectedTags.length === 0) return results
-    return results.filter((result) => result.tags?.some((tag) => selectedTags.includes(tag)))
-  }, [results, selectedTags])
+    let filtered = results
+
+    // Filter by tracker
+    if (selectedTrackers.length > 0) {
+      filtered = filtered.filter((result) => selectedTrackers.includes(result.tracker))
+    }
+
+    // Filter by tags
+    if (selectedTags.length > 0) {
+      filtered = filtered.filter((result) => result.tags?.some((tag) => selectedTags.includes(tag)))
+    }
+
+    return filtered
+  }, [results, selectedTrackers, selectedTags])
 
   const showResults = hasSearched || isLoading || error
-  const sortedResults = sortResults(filteredResults, sortBy)
+  const sortedResults = sortResults(filteredResults, sortBy, sortDirection)
 
   const toggleTagFilter = (tag: string) => {
     setSelectedTags((current) =>
@@ -613,7 +642,16 @@ export function TorrentSearch() {
     )
   }
 
-  const clearTagFilters = () => setSelectedTags([])
+  const toggleTrackerFilter = (tracker: string) => {
+    setSelectedTrackers((current) =>
+      current.includes(tracker) ? current.filter((item) => item !== tracker) : [...current, tracker]
+    )
+  }
+
+  const clearAllFilters = () => {
+    setSelectedTags([])
+    setSelectedTrackers([])
+  }
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
@@ -624,9 +662,11 @@ export function TorrentSearch() {
 
     try {
       const searchResults = await searchTorrents(searchQuery)
-      setResults(searchResults)
+      // Enrich results with parsed tags
+      const enrichedResults = searchResults.map(result => enrichResultWithTags(result))
+      setResults(enrichedResults)
 
-      if (searchResults.length === 0) {
+      if (enrichedResults.length === 0) {
         setError('No results found. Try a different search term.')
       }
     } catch (error) {
@@ -1114,9 +1154,35 @@ export function TorrentSearch() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.3 }}
-                  className="flex gap-2 mb-4 pt-6 px-6 flex-wrap justify-center max-w-4xl mx-auto"
+                  className="flex gap-2 mb-4 pt-6 px-6 flex-wrap justify-center max-w-4xl mx-auto items-center"
                 >
-                  <span className="text-sm text-muted-foreground self-center mr-2">Sort by:</span>
+                  {/* Filter Button - On the left */}
+                  <FilterPanel
+                    trackers={availableTrackers}
+                    tags={availableTags.map(tag => ({
+                      name: tag,
+                      count: results.filter(r => r.tags?.includes(tag)).length
+                    }))}
+                    selectedTrackers={selectedTrackers}
+                    selectedTags={selectedTags}
+                    onTrackerToggle={toggleTrackerFilter}
+                    onTagToggle={toggleTagFilter}
+                    onClearAll={clearAllFilters}
+                  />
+
+                  <span className="text-sm text-muted-foreground">Sort by:</span>
+                  
+                  {/* Sort Direction Toggle */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
+                    title={`Sort ${sortDirection === 'asc' ? 'descending' : 'ascending'}`}
+                  >
+                    {sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                  </Button>
+
+                  {/* Sort Options */}
                   {sortOptions.map((option) => (
                     <Button
                       key={option.key}
@@ -1128,32 +1194,6 @@ export function TorrentSearch() {
                     </Button>
                   ))}
                 </motion.div>
-
-                {availableTags.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.4 }}
-                    className="flex flex-wrap gap-2 px-6 pb-4 justify-center max-w-4xl mx-auto"
-                  >
-                    <span className="text-sm text-muted-foreground self-center mr-2">Filter tags:</span>
-                    {availableTags.map((tag) => (
-                      <Button
-                        key={tag}
-                        variant={selectedTags.includes(tag) ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => toggleTagFilter(tag)}
-                      >
-                        {tag}
-                      </Button>
-                    ))}
-                    {selectedTags.length > 0 && (
-                      <Button variant="secondary" size="sm" onClick={clearTagFilters}>
-                        Clear filters
-                      </Button>
-                    )}
-                  </motion.div>
-                )}
               </>
             )}
 
