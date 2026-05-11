@@ -17,7 +17,7 @@ export const sortOptions = [
   { key: 'name' as const, label: 'Name' },
   { key: 'size' as const, label: 'Size' },
   { key: 'date' as const, label: 'Date' },
-  { key: 'seeds' as const, label: 'Seeds'}
+  { key: 'seeds' as const, label: 'Seeders'}
 ]
 
 export function sortResults(results: TorrentResult[], sortBy: SortOption, direction: SortDirection = 'desc'): TorrentResult[] {
