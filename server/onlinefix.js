@@ -368,7 +368,10 @@ export default class OnlineFix {
       })
 
       console.log(`✅ Online-Fix: Downloaded ${torrentFilename} for ${gameFolder}`)
-      return torrentRes.data
+      return {
+        response: torrentRes,
+        filename: torrentFilename
+      }
 
     } catch (err) {
       console.error('Online-Fix torrent download error:', err.message)
@@ -418,7 +421,7 @@ export default class OnlineFix {
 
       console.log(`✅ Online-Fix: Downloaded repair ${rarFile} for ${gameFolder}`)
       return {
-        buffer: rarRes.data,
+        response: rarRes,
         filename: rarFile
       }
 

@@ -141,6 +141,7 @@ interface TorrentResultDetailsProps {
 
 function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick }: TorrentResultDetailsProps) {
   const isOnlineFix = result.tracker === 'Online-Fix'
+  const isFreeTP = result.tracker == 'FreeTP'
   const title = result.gameName || result.name
 
   // removed unused collapsible open state
@@ -149,7 +150,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
   const hasFetchedRef = useRef(false)
 
   useEffect(() => {
-    if (isOnlineFix && result.url && !hasFetchedRef.current) {
+    if ((isOnlineFix || isFreeTP) && result.url && !hasFetchedRef.current) {
       hasFetchedRef.current = true
       setIsLoadingDetails(true)
 
@@ -160,14 +161,14 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
           setDetails(response.data || {})
         })
         .catch(err => {
-          console.error('Failed to fetch Online-Fix details:', err)
+          console.error('Failed to fetch details:', err)
           setDetails({})
         })
         .finally(() => {
           setIsLoadingDetails(false)
         })
     }
-  }, [isOnlineFix, result.id, result.url])   // stable dependencies only
+  }, [isOnlineFix, isFreeTP, result.id, result.url])
 
   // Merge the result with fetched details
   const enrichedResult = { ...result, ...details }
@@ -195,7 +196,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <span className="rounded-full border border-border/60 bg-accent px-3 py-1">{result.tracker}</span>
-              {!isOnlineFix && result.author && result.author !== 'Unknown' && (
+              {!isOnlineFix && !isFreeTP && result.author && result.author !== 'Unknown' && (
                 <span className="rounded-full border border-border/60 bg-accent px-3 py-1">{result.author}</span>
               )}
             </div>
@@ -225,12 +226,12 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
                 </motion.div>
               )}
 
-              {/* Video - Now animated */}
-              {isOnlineFix && enrichedResult.videoUrl && (
+              {/* Video */}
+              {(isOnlineFix || isFreeTP) && enrichedResult.videoUrl && (
                 <motion.div
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}                  // ← Second
+                  transition={{ delay: 0.1 }}
                   className="rounded-3xl overflow-hidden border border-border/60 bg-black aspect-video"
                 >
                   <iframe
@@ -243,7 +244,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
               )}
 
               {/* Loading State */}
-              {isOnlineFix && isLoadingDetails && (
+              {(isOnlineFix || isFreeTP) && isLoadingDetails && (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mb-4" />
                   <p className="text-muted-foreground">Loading game details...</p>
@@ -251,8 +252,8 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
                 </div>
               )}
 
-              {/* Main Content - Animated when loaded */}
-              {(!isOnlineFix || !isLoadingDetails) && (
+              {/* Main Content */}
+              {((!isOnlineFix && !isFreeTP) || !isLoadingDetails) && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -262,58 +263,36 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
                   {isOnlineFix ? (
                     // Online-Fix Content with staggered animation
                     <div className="space-y-4">
-                      {/* Release Date */}
-                      {enrichedResult.releaseDate && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 15 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.15 }}
-                          className="rounded-3xl border border-border/60 bg-accent/40 p-5"
-                        >
-                          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Релиз игры</p>
-                          <p className="mt-2 text-lg font-semibold text-foreground">{enrichedResult.releaseDate}</p>
-                        </motion.div>
-                      )}
-
-                      {/* Game Store */}
-                      {enrichedResult.gameStore && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 15 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.2 }}
-                          className="rounded-3xl border border-border/60 bg-accent/40 p-5"
-                        >
-                          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Игра через</p>
-                          <p className="mt-2 text-lg font-semibold text-foreground">{enrichedResult.gameStore}</p>
-                        </motion.div>
-                      )}
-
-                      {/* Official Servers */}
-                      {enrichedResult.supportsOfficialServers && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 15 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.25 }}
-                          className="rounded-3xl border border-green-500/30 bg-green-500/10 px-5 py-4"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500">
-                              <span className="text-sm font-bold text-white">✓</span>
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-green-400">Official Servers Supported</p>
-                              <p className="text-xs text-muted-foreground">You can play on official servers</p>
-                            </div>
+                      {/* Row 1: Release Date + Game Store */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 15 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.15 }}
+                      >
+                        {(enrichedResult.releaseDate || enrichedResult.gameStore) && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {enrichedResult.releaseDate && (
+                              <div className={`rounded-3xl border border-border/60 bg-accent/40 p-5 ${!enrichedResult.gameStore ? 'sm:col-span-2' : ''}`}>
+                                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Релиз игры</p>
+                                <p className="mt-2 text-lg font-semibold text-foreground">{enrichedResult.releaseDate}</p>
+                              </div>
+                            )}
+                            {enrichedResult.gameStore && (
+                              <div className={`rounded-3xl border border-border/60 bg-accent/40 p-5 ${!enrichedResult.releaseDate ? 'sm:col-span-2' : ''}`}>
+                                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Игра через</p>
+                                <p className="mt-2 text-lg font-semibold text-foreground">{enrichedResult.gameStore}</p>
+                              </div>
+                            )}
                           </div>
-                        </motion.div>
-                      )}
+                        )}
+                      </motion.div>
 
                       {/* COOP + MULTIPLAYER */}
                       {(enrichedResult.coopPlayers || enrichedResult.multiplayerPlayers) && (
                         <motion.div
                           initial={{ opacity: 0, y: 15 }}
                           animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.3 }}
+                          transition={{ delay: 0.25 }}
                         >
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
 
@@ -368,6 +347,26 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
                         </motion.div>
                       )}
 
+                      {/* Official Servers */}
+                      {enrichedResult.supportsOfficialServers && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 15 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.3 }}
+                          className="rounded-3xl border border-green-500/30 bg-green-500/10 px-5 py-4"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500">
+                              <span className="text-sm font-bold text-white">✓</span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-green-400">Official Servers Supported</p>
+                              <p className="text-xs text-muted-foreground">You can play on official servers</p>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+
                       {enrichedResult.gameInfo && (
                         <div className="space-y-3 rounded-3xl border border-border/60 bg-background/80 p-5">
                           <h3 className="text-lg font-semibold text-foreground">Информация о игре</h3>
@@ -407,8 +406,93 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
                         </motion.div>
                       )}
                     </div>
+                  ) : isFreeTP ? (
+                    // FreeTP Content
+                    <div className="space-y-4">
+                      {/* Row 1: Author + Release Date */}
+                      {(enrichedResult.author || enrichedResult.releaseDate) && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {enrichedResult.author && (
+                            <div className={`rounded-3xl border border-border/60 bg-accent/40 p-5 ${!enrichedResult.releaseDate ? 'sm:col-span-2' : ''}`}>
+                              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Автор</p>
+                              <p className="mt-2 text-lg font-semibold text-foreground">{enrichedResult.author}</p>
+                            </div>
+                          )}
+                          {enrichedResult.releaseDate && (
+                            <div className={`rounded-3xl border border-border/60 bg-accent/40 p-5 ${!enrichedResult.author ? 'sm:col-span-2' : ''}`}>
+                              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Дата выхода</p>
+                              <p className="mt-2 text-lg font-semibold text-foreground">{enrichedResult.releaseDate}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Row 2: Play Method + Max Players */}
+                      {(enrichedResult.playMethod || enrichedResult.maxPlayers) && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {enrichedResult.playMethod && (
+                            <div className={`rounded-3xl border border-border/60 bg-accent/40 p-5 ${!enrichedResult.maxPlayers ? 'sm:col-span-2' : ''}`}>
+                              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Способ игры</p>
+                              <p className="mt-2 text-lg font-semibold text-foreground">{enrichedResult.playMethod}</p>
+                            </div>
+                          )}
+                          {enrichedResult.maxPlayers && (
+                            <div className={`rounded-3xl border border-border/60 bg-accent/40 p-5 ${!enrichedResult.playMethod ? 'sm:col-span-2' : ''}`}>
+                              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Макс. игроков</p>
+                              <p className="mt-2 text-lg font-semibold text-foreground">{enrichedResult.maxPlayers}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Row 3: Language + Genre */}
+                      {(enrichedResult.language || enrichedResult.genre) && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {enrichedResult.language && (
+                            <div className={`rounded-3xl border border-border/60 bg-accent/40 p-5 ${!enrichedResult.genre ? 'sm:col-span-2' : ''}`}>
+                              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Язык</p>
+                              <p className="mt-2 text-lg font-semibold text-foreground">{enrichedResult.language}</p>
+                            </div>
+                          )}
+                          {enrichedResult.genre && (
+                            <div className={`rounded-3xl border border-border/60 bg-accent/40 p-5 ${!enrichedResult.language ? 'sm:col-span-2' : ''}`}>
+                              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Жанр</p>
+                              <p className="mt-2 text-lg font-semibold text-foreground">{enrichedResult.genre}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Singleplayer */}
+                      {enrichedResult.singleplayer && (
+                        <div className="rounded-3xl border border-border/60 bg-accent/40 p-5">
+                          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Одиночная игра</p>
+                          <p className="mt-2 text-lg font-semibold text-foreground">{enrichedResult.singleplayer}</p>
+                        </div>
+                      )}
+
+                      {/* Description */}
+                      {enrichedResult.description && (
+                        <div className="space-y-3 rounded-3xl border border-border/60 bg-background/80 p-5">
+                          <h3 className="text-lg font-semibold text-foreground">Описание игры</h3>
+                          <p className="text-sm leading-7 text-muted-foreground whitespace-pre-line">
+                            {enrichedResult.description}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Launch Guide */}
+                      {enrichedResult.launchGuide && (
+                        <div className="space-y-3 rounded-3xl border border-border/60 bg-background/80 p-5">
+                          <h3 className="text-lg font-semibold text-foreground">Запуск</h3>
+                          <p className="text-sm leading-7 text-muted-foreground whitespace-pre-line">
+                            {enrichedResult.launchGuide}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   ) : (
-                    // RuTracker/FreeTP content
+                    // RuTracker content
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="rounded-3xl border border-border/60 bg-accent/40 p-5">
                         <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Release date</p>
@@ -421,7 +505,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
                     </div>
                   )}
 
-                  {!isOnlineFix && (
+                  {!isOnlineFix && !isFreeTP && (
                     <div className="space-y-3 rounded-3xl border border-border/60 bg-background/80 p-5">
                       <h3 className="text-lg font-semibold text-foreground">Description</h3>
                       <p className="text-sm leading-7 text-muted-foreground">
@@ -438,7 +522,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
         {/* Footer Buttons */}
         <div className="border-t border-border/60 bg-background/95 p-6 flex-shrink-0">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {isOnlineFix ? (
+            {(isOnlineFix || isFreeTP) ? (
               <>
                 <Button
                   onClick={() => {
@@ -451,7 +535,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
                       window.location.href = `http://localhost:3001/api/download/${enrichedResult.id}?${params.toString()}`
                     }
                   }}
-                  disabled={!enrichedResult.gameName || !enrichedResult.url}
+                  disabled={isFreeTP ? !enrichedResult.fixAvailable : !enrichedResult.gameName || !enrichedResult.url}
                   className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2"
                 >
                   <Wrench className="h-4 w-4" />
@@ -469,6 +553,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
                       window.location.href = `http://localhost:3001/api/download/${enrichedResult.id}?${params.toString()}`
                     }
                   }}
+                  disabled={isFreeTP ? !enrichedResult.torrentAvailable : !enrichedResult.gameName || !enrichedResult.url}
                   className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2"
                 >
                   <Download className="h-4 w-4" />

@@ -277,7 +277,7 @@ export default class RuTracker {
       const res = await this.client.get(`dl.php?t=${topicId}`, {
         responseType: 'arraybuffer'
       })
-      return res.data // Return raw buffer (torrent file)
+      return res
     } catch (err) {
       console.error('Torrent download error:', err.message)
       throw err

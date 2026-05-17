@@ -18,12 +18,14 @@ interface TorrentResultCardProps {
 }
 
 export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick, onDownloadClick, onOpenDetails }: TorrentResultCardProps) {
-  const isOnlineFix = result.tracker === 'Online-Fix'
+  const isOnlineFix = result.tracker === 'Online-Fix' 
+  const isFreeTP = result.tracker == 'FreeTP'
+  const isRutracker = result.tracker == "RuTracker"
 
   const handleMagnetClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
     if (!isPlaceholder) {
-      if (isOnlineFix) {
+      if (isOnlineFix || isFreeTP) {
         if (result.url) {
           window.open(result.url, '_blank')
         }
@@ -36,7 +38,7 @@ export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick
   const handleDownloadClick = (event: MouseEvent<HTMLButtonElement>, type: 'torrent' | 'repair' = 'torrent') => {
     event.stopPropagation()
     if (!isPlaceholder) {
-      if (isOnlineFix) {
+      if (isOnlineFix || isFreeTP) {
         if (result.gameName && result.url) {
           const params = new URLSearchParams({
             gameName: result.gameName,
@@ -57,7 +59,7 @@ export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick
         return 'bg-blue-900 text-white border-blue-900'
       case 'RuTracker':
         return 'bg-red-500 text-white border-red-500'
-      case 'FreeTp':
+      case 'FreeTP':
         return 'bg-green-700 text-white border-green-700'
       default:
         return ''
@@ -76,26 +78,27 @@ export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick
           </h3>
 
           <div className="flex items-center gap-6 text-sm text-muted-foreground mb-2">
-            <div className="flex items-center gap-2">
+            
+            {isRutracker && <div className="flex items-center gap-2">
               <HardDrive className="w-4 h-4" />
               <span>{result.size}</span>
-            </div>
+            </div>}
 
-            {result.uploadDate && result.uploadDate !== 'Unknown' && (
+            {isRutracker && result.uploadDate && result.uploadDate !== 'Unknown' && (
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4" />
                 <span>{result.uploadDate}</span>
               </div>
             )}
 
-            {result.tracker === 'RuTracker' && result.seeds && result.seeds !== 'Unknown' && (
+            {isRutracker && result.seeds && result.seeds !== 'Unknown' && (
               <div className="flex items-center gap-2 text-green-500">
                 <ArrowUp className="w-4 h-4" />
                 <span>{result.seeds}</span>
               </div>
             )}
 
-            {result.tracker === 'RuTracker' && result.leeches && result.leeches !== 'Unknown' && (
+            {isRutracker && result.leeches && result.leeches !== 'Unknown' && (
               <div className="flex items-center gap-2 text-red-500">
                 <ArrowDown className="w-4 h-4" />
                 <span>{result.leeches}</span>
@@ -107,7 +110,7 @@ export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick
             <Badge variant="outline" className={`text-xs ${getTrackerBadgeColor()}`}>
               {result.tracker}
             </Badge>
-            {result.author && !isOnlineFix && result.author !== 'Unknown' && (
+            {result.author && !isOnlineFix && !isFreeTP && result.author !== 'Unknown' && (
               <Badge variant="secondary" className="text-xs">
                 {result.author}
               </Badge>
@@ -126,13 +129,13 @@ export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick
           <Button
             size="sm"
             className="rounded-r-none border-r border-primary-foreground/20 px-3"
-            disabled={isPlaceholder || (isOnlineFix ? !result.url : !onMagnetClick)}
+            disabled={isPlaceholder || (isOnlineFix || isFreeTP ? !result.url : !onMagnetClick)}
             onClick={handleMagnetClick}
           >
-            {isOnlineFix ? <ExternalLink className="w-4 h-4" /> : <Magnet className="w-4 h-4" />}
+            {isOnlineFix || isFreeTP ? <ExternalLink className="w-4 h-4" /> : <Magnet className="w-4 h-4" />}
           </Button>
 
-          {isOnlineFix && (
+          {(isOnlineFix || isFreeTP) && (
             <Button
               size="sm"
               className="rounded-none border-x border-primary-foreground/20 px-3"
@@ -147,7 +150,7 @@ export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick
           <Button
             size="sm"
             className="rounded-l-none px-3"
-            disabled={isPlaceholder || (isOnlineFix ? !result.gameName : !onDownloadClick)}
+            disabled={isPlaceholder || (isOnlineFix || isFreeTP ? !result.gameName : !onDownloadClick)}
             onClick={(event) => handleDownloadClick(event, 'torrent')}
           >
             <Download className="w-4 h-4" />

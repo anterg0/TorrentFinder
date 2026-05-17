@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import RuTracker from './rutracker.js'
 import OnlineFix from './onlinefix.js'
+import Freetp from './freetp.js'
 
 const app = express()
 
@@ -10,6 +11,7 @@ app.use(express.json())
 
 const ruTrackerClient = new RuTracker()
 const onlineFixClient = new OnlineFix()
+const freetpClient = new Freetp()
 
 /* =========================
    AUTH
@@ -34,6 +36,11 @@ app.post('/api/auth', async (req, res) => {
         return res.json({ success: true, cached: true, service: 'onlinefix' })
       }
       success = await onlineFixClient.login(username, password)
+    } else if (service === 'ft') {
+      if (await freetpClient.isLoggedIn()) {
+        return res.json({ success: true, cached: true, service: 'freetp' })
+      }
+      success = await freetpClient.login(username, password)
     } else {
       return res.status(400).json({ error: 'Unknown service' })
     }
@@ -61,8 +68,9 @@ app.get('/api/search', async (req, res) => {
     // Check auth status
     const ruTrackerLoggedIn = await ruTrackerClient.isLoggedIn()
     const onlineFixLoggedIn = await onlineFixClient.isLoggedIn()
+    const freetpLoggedIn = await freetpClient.isLoggedIn()
 
-    console.log(`🔐 Auth status - RuTracker: ${ruTrackerLoggedIn}, Online-Fix: ${onlineFixLoggedIn}`)
+    console.log(`Auth status - RuTracker: ${ruTrackerLoggedIn}, Online-Fix: ${onlineFixLoggedIn}, Freetp: ${freetpLoggedIn}`)
 
     // Search RuTracker
     if (ruTrackerLoggedIn) {
@@ -90,8 +98,17 @@ app.get('/api/search', async (req, res) => {
       console.log('⚠️ Online-Fix: Not logged in')
     }
 
+    // Search Freetp (no auth required)
+    try {
+      const freetpResults = await freetpClient.search(q)
+      results.push(...freetpResults)
+      console.log(`Freetp: ${freetpResults.length} results`)
+    } catch (err) {
+      console.log('Freetp search failed:', err.message)
+    }
+
     if (results.length === 0) {
-      return res.status(401).json({ error: 'Not authenticated with any tracker' })
+      return res.status(404).json({ error: 'No results found' })
     }
 
     res.json(results)
@@ -114,6 +131,9 @@ app.get('/api/magnet/:id', async (req, res) => {
       // Online-Fix result
       const gameId = id.replace('of-', '')
       magnet = await onlineFixClient.getMagnetLink(gameId)
+    } else if (id.startsWith('ft-')) {
+      // Freetp uses direct download, no magnet
+      return res.status(400).json({ error: 'Magnet links not available for Freetp' })
     } else {
       // RuTracker result
       const rtId = id.replace('rt-', '')
@@ -144,33 +164,67 @@ app.get('/api/download/:id', async (req, res) => {
 
       if (type === 'repair') {
         const repair = await onlineFixClient.downloadRepair(gameName, gameUrl)
-        
-        res.setHeader('Content-Type', 'application/x-rar-compressed')
-        res.setHeader(
-          'Content-Disposition',
-          `attachment; filename="${repair.filename}"`
-        )
-        return res.send(repair.buffer)
+        const r = repair.response
+        const ct = r.headers['content-type']
+        if (ct) res.setHeader('Content-Type', ct)
+        const cd = r.headers['content-disposition']
+        if (cd) {
+          res.setHeader('Content-Disposition', cd)
+        } else {
+          res.setHeader('Content-Type', 'application/x-rar-compressed')
+          res.setHeader('Content-Disposition', `attachment; filename="${repair.filename}"`)
+        }
+        return res.send(r.data)
       } else {
-        // existing torrent logic
-        const file = await onlineFixClient.downloadTorrent(gameName, gameUrl)
-        console.log(file)
-        res.setHeader('Content-Type', 'application/x-bittorrent')
-        res.setHeader('Content-Disposition', `attachment; filename="${gameName}.torrent"`)
-        return res.send(file)
+        const result = await onlineFixClient.downloadTorrent(gameName, gameUrl)
+        const r = result.response
+        const ct = r.headers['content-type']
+        if (ct) res.setHeader('Content-Type', ct)
+        const cd = r.headers['content-disposition']
+        if (cd) {
+          res.setHeader('Content-Disposition', cd)
+        } else {
+          res.setHeader('Content-Type', 'application/x-bittorrent')
+          res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`)
+        }
+        return res.send(r.data)
       }
+    } else if (id.startsWith('ft-')) {
+      if (!gameUrl) {
+        return res.status(400).json({ error: 'gameUrl parameter required for Freetp' })
+      }
+
+      const response = type === 'repair'
+        ? await freetpClient.downloadRepair(gameUrl)
+        : await freetpClient.downloadTorrent(gameUrl)
+
+      const ct = response.headers['content-type']
+      if (ct) res.setHeader('Content-Type', ct)
+
+      const cd = response.headers['content-disposition']
+      if (cd) {
+        res.setHeader('Content-Disposition', cd)
+      } else {
+        res.setHeader('Content-Disposition', type === 'repair'
+          ? 'attachment; filename="freetp_repair.rar"'
+          : `attachment; filename="freetp_${id}.torrent"`)
+      }
+      return res.send(response.data)
     } else {
       // RuTracker - download torrent file
       const rtId = id.replace('rt-', '')
-      const file = await ruTrackerClient.downloadTorrent(rtId)
+      const r = await ruTrackerClient.downloadTorrent(rtId)
 
-      res.setHeader('Content-Type', 'application/x-bittorrent')
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename="torrent_${rtId}.torrent"`
-      )
-
-      res.send(file)
+      const ct = r.headers['content-type']
+      if (ct) res.setHeader('Content-Type', ct)
+      const cd = r.headers['content-disposition']
+      if (cd) {
+        res.setHeader('Content-Disposition', cd)
+      } else {
+        res.setHeader('Content-Type', 'application/x-bittorrent')
+        res.setHeader('Content-Disposition', `attachment; filename="torrent_${rtId}.torrent"`)
+      }
+      res.send(r.data)
     }
   } catch (e) {
     res.status(500).json({ error: e.message })
@@ -195,6 +249,21 @@ app.get('/api/details/:id', async (req, res) => {
         })
       }
       details = await onlineFixClient.getDetails(url)
+    } else if (id.startsWith('ft-')) {
+      if (!url) {
+        return res.status(400).json({
+          error: 'Missing url parameter. Freetp details require the full page URL.'
+        })
+      }
+      const pageDetails = await freetpClient.getDetails(url)
+      const fileIds = await freetpClient.getFileIds(url)
+      details = {
+        ...pageDetails,
+        torrentId: fileIds.torrentId,
+        fixId: fileIds.fixId,
+        torrentAvailable: fileIds.torrentAvailable,
+        fixAvailable: fileIds.fixAvailable
+      }
     }
 
     res.json(details)
@@ -214,10 +283,11 @@ app.get('/api/auth-status', async (req, res) => {
   try {
     const rutracker = await ruTrackerClient.isLoggedIn()
     const onlinefix = await onlineFixClient.isLoggedIn()
+    const freetp = await freetpClient.isLoggedIn()
     res.json({
       rutracker,
       onlinefix,
-      freetp: false
+      freetp
     })
   } catch (e) {
     res.status(500).json({ error: e.message })
@@ -240,6 +310,12 @@ app.post('/api/logout/:service', async (req, res) => {
       if (onlineFixClient.cookieFile) {
         const fs = await import('fs')
         fs.unlinkSync(onlineFixClient.cookieFile)
+      }
+      res.json({ success: true })
+    } else if (service === 'freetp') {
+      if (freetpClient.cookieFile) {
+        const fs = await import('fs')
+        fs.unlinkSync(freetpClient.cookieFile)
       }
       res.json({ success: true })
     } else {
