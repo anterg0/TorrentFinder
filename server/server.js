@@ -18,35 +18,51 @@ const freetpClient = new Freetp()
 ========================= */
 
 app.post('/api/auth', async (req, res) => {
-  const { username, password } = req.body
+  const { username, password, captcha } = req.body
   const service = req.query.service || 'ru' // Default to RuTracker
 
   try {
-    let client, success, isLoggedIn
+    let result
 
     if (service === 'ru') {
       // RuTracker
       if (await ruTrackerClient.isLoggedIn()) {
         return res.json({ success: true, cached: true, service: 'rutracker' })
       }
-      success = await ruTrackerClient.login(username, password)
+      result = await ruTrackerClient.login(username, password, captcha || '')
+      if (!result.success) {
+        if (result.captcha) {
+          return res.status(401).json({
+            success: false,
+            captcha: true,
+            error: 'CAPTCHA required',
+            captchaImageUrl: ruTrackerClient.captchaImageUrl
+          })
+        }
+        if (result.networkError) {
+          return res.status(502).json({ success: false, error: 'Network error connecting to RuTracker' })
+        }
+        return res.status(401).json({ success: false, error: 'Invalid credentials' })
+      }
     } else if (service === 'of') {
       // Online-Fix
       if (await onlineFixClient.isLoggedIn()) {
         return res.json({ success: true, cached: true, service: 'onlinefix' })
       }
-      success = await onlineFixClient.login(username, password)
+      result = await onlineFixClient.login(username, password)
+      if (!result) {
+        return res.status(401).json({ success: false, error: 'Invalid credentials' })
+      }
     } else if (service === 'ft') {
       if (await freetpClient.isLoggedIn()) {
         return res.json({ success: true, cached: true, service: 'freetp' })
       }
-      success = await freetpClient.login(username, password)
+      result = await freetpClient.login(username, password)
+      if (!result) {
+        return res.status(401).json({ success: false, error: 'Invalid credentials' })
+      }
     } else {
       return res.status(400).json({ error: 'Unknown service' })
-    }
-
-    if (!success) {
-      return res.status(401).json({ success: false })
     }
 
     res.json({ success: true, service })

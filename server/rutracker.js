@@ -27,6 +27,10 @@ export default class RuTracker {
     }))
 
     this.loadCookies()
+
+    this.captchaSid = null
+    this.captchaFieldName = null
+    this.captchaImageUrl = null
   }
 
   /* =========================
@@ -117,28 +121,75 @@ export default class RuTracker {
   }
 
   /* =========================
+     CAPTCHA HELPERS
+  ========================= */
+
+  parseCaptcha(html) {
+    const imgMatch = html.match(/<img[^>]+src="([^"]*captcha\/[^"]+)"[^>]*>/i)
+    const sidMatch = html.match(/<input[^>]+name="cap_sid"[^>]+value="([^"]+)"/i)
+    const codeMatch = html.match(/<input[^>]+name="(cap_code_[^"]+)"[^>]*>/i)
+
+    this.captchaSid = sidMatch ? sidMatch[1] : null
+    this.captchaFieldName = codeMatch ? codeMatch[1] : null
+    this.captchaImageUrl = imgMatch
+      ? (imgMatch[1].startsWith('//') ? 'https:' + imgMatch[1] : imgMatch[1])
+      : null
+
+    return this.captchaSid && this.captchaFieldName && this.captchaImageUrl
+  }
+
+  clearCaptcha() {
+    this.captchaSid = null
+    this.captchaFieldName = null
+    this.captchaImageUrl = null
+  }
+
+  async getCaptchaImage() {
+    if (!this.captchaImageUrl) throw new Error('No captcha image available')
+    const res = await axios.get(this.captchaImageUrl, {
+      responseType: 'arraybuffer',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    })
+    return res
+  }
+
+  /* =========================
      LOGIN
   ========================= */
 
-  async login(username, password) {
+  async login(username, password, captcha = '') {
     try {
       const params = new URLSearchParams()
       params.append('login_username', username)
       params.append('login_password', password)
       params.append('login', 'Вход')
 
+      if (captcha && this.captchaSid && this.captchaFieldName) {
+        params.append('cap_sid', this.captchaSid)
+        params.append(this.captchaFieldName, captcha)
+      }
+
       const res = await this.client.post('login.php', params)
       const html = this.decodeResponse(res.data, res.headers['content-type'])
 
       if (html.includes('logout') || html.includes('Выход')) {
         console.log('✅ RuTracker: Successfully logged in')
+        this.clearCaptcha()
         this.saveCookies()
-        return true
+        return { success: true }
       }
-      return false
+
+      if (this.parseCaptcha(html)) {
+        console.log('⚠️ RuTracker: CAPTCHA required')
+        return { success: false, captcha: true }
+      }
+
+      return { success: false }
     } catch (err) {
       console.error('Login error:', err.message)
-      return false
+      return { success: false, networkError: true }
     }
   }
 
