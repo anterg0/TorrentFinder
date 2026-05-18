@@ -61,19 +61,18 @@ app.post('/api/auth', async (req, res) => {
 
 app.get('/api/search', async (req, res) => {
   const q = req.query.q
+  const trackersParam = req.query.trackers
+  const requestedTrackers = trackersParam ? String(trackersParam).split(',').map(t => t.trim()) : null
 
   try {
     const results = []
 
     // Check auth status
     const ruTrackerLoggedIn = await ruTrackerClient.isLoggedIn()
-    const onlineFixLoggedIn = await onlineFixClient.isLoggedIn()
-    const freetpLoggedIn = await freetpClient.isLoggedIn()
+    console.log(`Auth status - RuTracker: ${ruTrackerLoggedIn}, trackers: ${requestedTrackers?.join(',') || 'all'}`)
 
-    console.log(`Auth status - RuTracker: ${ruTrackerLoggedIn}, Online-Fix: ${onlineFixLoggedIn}, Freetp: ${freetpLoggedIn}`)
-
-    // Search RuTracker
-    if (ruTrackerLoggedIn) {
+    // Search RuTracker (requires auth)
+    if ((!requestedTrackers || requestedTrackers.includes('rutracker')) && ruTrackerLoggedIn) {
       try {
         const ruTrackerResults = await ruTrackerClient.search(q)
         results.push(...ruTrackerResults)
@@ -81,12 +80,10 @@ app.get('/api/search', async (req, res) => {
       } catch (err) {
         console.log('⚠️ RuTracker search failed:', err.message)
       }
-    } else {
-      console.log('⚠️ RuTracker: Not logged in')
     }
 
-    // Search Online-Fix
-    if (onlineFixLoggedIn) {
+    // Search Online-Fix (no auth required for search)
+    if (!requestedTrackers || requestedTrackers.includes('onlinefix')) {
       try {
         const onlineFixResults = await onlineFixClient.search(q)
         results.push(...onlineFixResults)
@@ -94,17 +91,17 @@ app.get('/api/search', async (req, res) => {
       } catch (err) {
         console.log('⚠️ Online-Fix search failed:', err.message)
       }
-    } else {
-      console.log('⚠️ Online-Fix: Not logged in')
     }
 
     // Search Freetp (no auth required)
-    try {
-      const freetpResults = await freetpClient.search(q)
-      results.push(...freetpResults)
-      console.log(`Freetp: ${freetpResults.length} results`)
-    } catch (err) {
-      console.log('Freetp search failed:', err.message)
+    if (!requestedTrackers || requestedTrackers.includes('freetp')) {
+      try {
+        const freetpResults = await freetpClient.search(q)
+        results.push(...freetpResults)
+        console.log(`Freetp: ${freetpResults.length} results`)
+      } catch (err) {
+        console.log('Freetp search failed:', err.message)
+      }
     }
 
     if (results.length === 0) {

@@ -8,6 +8,7 @@ import { FilterPanel } from './FilterPanel'
 import { TorrentResult, enrichResultWithTags } from '../utils/torrentUtils'
 import { Search, User, Lock, X, Shield, Menu, ExternalLink, Download, Wrench, ArrowUp, ArrowDown } from 'lucide-react'
 import axios from 'axios'
+import { toast } from 'sonner'
 // Collapsible components removed (not used) - kept UI simple
 
 export type SortOption = 'name' | 'size' | 'date' | 'seeds'
@@ -55,9 +56,9 @@ export function sortResults(results: TorrentResult[], sortBy: SortOption, direct
 }
 
 // Updated search function with auth awareness
-export async function searchTorrents(query: string): Promise<TorrentResult[]> {
+export async function searchTorrents(query: string, trackers: string[] = ['rutracker', 'onlinefix', 'freetp']): Promise<TorrentResult[]> {
   try {
-    console.log(`Searching for: "${query}"`)
+    console.log(`Searching for: "${query}" with trackers: ${trackers.join(',')}`)
 
     const healthResponse = await axios.get('http://localhost:3001/api/health', {
       timeout: 5000
@@ -65,7 +66,7 @@ export async function searchTorrents(query: string): Promise<TorrentResult[]> {
     console.log('Server health check:', healthResponse.data)
 
     const response = await axios.get(`http://localhost:3001/api/search`, {
-      params: { q: query },
+      params: { q: query, trackers: trackers.join(',') },
       timeout: 45000
     })
 
@@ -634,6 +635,7 @@ export function TorrentSearch() {
   const [ruTrackerAuth, setRuTrackerAuth] = useState(false)
   const [onlineFixAuth, setOnlineFixAuth] = useState(false)
   const [freeTpAuth, setFreeTpAuth] = useState(false)
+  const [trackersToSearch, setTrackersToSearch] = useState<string[]>(['rutracker', 'onlinefix', 'freetp'])
 
   // Check auth status on mount
   useEffect(() => {
@@ -645,6 +647,14 @@ export function TorrentSearch() {
         setRuTrackerAuth(response.data.rutracker || false)
         setOnlineFixAuth(response.data.onlinefix || false)
         setFreeTpAuth(response.data.freetp || false)
+
+        // Show login reminders on mount if not logged in
+        if (!response.data.rutracker) {
+          toast.info('Log in to RuTracker to search through it', { id: 'rutracker-reminder', duration: 5000 })
+        }
+        if (!response.data.onlinefix) {
+          toast.info('Log in to Online-Fix to download fixes', { id: 'onlinefix-reminder', duration: 5000 })
+        }
       } catch (error) {
         console.error('Failed to check auth status:', error)
       }
@@ -752,13 +762,21 @@ export function TorrentSearch() {
     setError(null)
 
     try {
-      const searchResults = await searchTorrents(searchQuery)
+      const searchResults = await searchTorrents(searchQuery, trackersToSearch)
       // Enrich results with parsed tags
       const enrichedResults = searchResults.map(result => enrichResultWithTags(result))
       setResults(enrichedResults)
 
       if (enrichedResults.length === 0) {
         setError('No results found. Try a different search term.')
+      }
+
+      // Remind user about login on each search
+      if (!ruTrackerAuth && trackersToSearch.includes('rutracker')) {
+        toast.info('Log in to RuTracker to search through it', { id: 'rutracker-reminder', duration: 3000 })
+      }
+      if (!onlineFixAuth) {
+        toast.info('Log in to Online-Fix to download fixes', { id: 'onlinefix-reminder', duration: 3000 })
       }
     } catch (error) {
       console.error('Search error:', error)
@@ -1193,6 +1211,40 @@ export function TorrentSearch() {
           transition={{ delay: 0.1 }}
           className="w-full max-w-2xl px-6"
         >
+          {/* Tracker selection pills */}
+          <div className="flex items-center justify-center gap-2 mb-4">
+            {[
+              { id: 'rutracker', label: 'RuTracker', disabled: !ruTrackerAuth },
+              { id: 'onlinefix', label: 'Online-Fix', disabled: false },
+              { id: 'freetp', label: 'FreeTP', disabled: false },
+            ].map(({ id, label, disabled }) => {
+              const selected = trackersToSearch.includes(id)
+              return (
+                <button
+                  key={id}
+                  onClick={() => {
+                    if (disabled) return
+                    setTrackersToSearch(prev =>
+                      prev.includes(id)
+                        ? prev.filter(t => t !== id)
+                        : [...prev, id]
+                    )
+                  }}
+                  disabled={disabled}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+                    selected
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : disabled
+                        ? 'bg-accent/30 text-muted-foreground border-border/30 cursor-not-allowed opacity-50'
+                        : 'bg-background text-foreground border-border/60 hover:bg-accent/50'
+                  }`}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+
           <div className="relative">
             <Input
               type="text"
