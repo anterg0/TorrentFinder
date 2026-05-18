@@ -91,21 +91,6 @@ export async function searchTorrents(query: string, trackers: string[] = ['rutra
   }
 }
 
-export async function loginRuTracker(username: string, password: string, captcha: string = ''): Promise<boolean> {
-  try {
-    const response = await axios.post('http://localhost:3001/api/auth', {
-      username,
-      password,
-      captcha
-    }, {
-      timeout: 30000
-    })
-    return response.data.success
-  } catch {
-    return false
-  }
-}
-
 async function getMagnetLink(id: string): Promise<string> {
   const res = await axios.get(`http://localhost:3001/api/magnet/${id}`, {
     timeout: 15000
@@ -800,31 +785,40 @@ export function TorrentSearch() {
     setCaptchaError('')
 
     try {
-      const success = await loginRuTracker(authUsername, authPassword, captchaCode)
-      if (success) {
-        setShowAuthModal(false)
-        setShowCaptcha(false)
-        setCaptchaCode('')
-        setCaptchaImageLoaded(false)
-        setCaptchaImageSrc('/api/captcha')
-        setRuTrackerAuth(true)
-        // Auto-retry search
-        setTimeout(() => handleSearch(), 500)
-      } else {
-        if (!showCaptcha) {
-          setShowCaptcha(true)
-          setCaptchaImageSrc('/api/captcha?t=' + Date.now())
-          setCaptchaImageLoaded(false)
-          setAuthError('Login failed. Solve CAPTCHA below.')
-        } else if (!captchaImageLoaded) {
-          setAuthError('CAPTCHA unavailable. Try again.')
+      await axios.post('http://localhost:3001/api/auth', {
+        username: authUsername,
+        password: authPassword,
+        captcha: captchaCode
+      }, { timeout: 30000 })
+
+      setShowAuthModal(false)
+      setShowCaptcha(false)
+      setCaptchaCode('')
+      setCaptchaImageLoaded(false)
+      setCaptchaImageSrc('')
+      setRuTrackerAuth(true)
+      setTimeout(() => handleSearch(), 500)
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response?.status === 401) {
+        const data = err.response.data
+        if (data.captcha && data.captchaImageUrl) {
+          if (!showCaptcha) {
+            setShowCaptcha(true)
+            setCaptchaImageSrc(data.captchaImageUrl)
+            setCaptchaImageLoaded(false)
+            setAuthError('Login failed. Solve CAPTCHA below.')
+          } else if (!captchaImageLoaded) {
+            setAuthError('CAPTCHA unavailable. Try again.')
+          } else {
+            setAuthError('Wrong CAPTCHA. Click image to refresh.')
+            setCaptchaImageSrc(data.captchaImageUrl + '?t=' + Date.now())
+          }
         } else {
-          setAuthError('Wrong CAPTCHA. Click image to refresh.')
-          setCaptchaImageSrc('/api/captcha?t=' + Date.now())
+          setAuthError('Invalid credentials.')
         }
+      } else {
+        setAuthError('Network error. Check server.')
       }
-    } catch (error) {
-      setAuthError('Network error. Check server.')
     } finally {
       setAuthLoading(false)
     }
@@ -906,7 +900,7 @@ export function TorrentSearch() {
                   </div>
                   <div className="whiteText">
                     <h2 className="text-2xl font-bold">RuTracker Login</h2>
-                    <p className="text-sm">Enter credentials to search</p>
+                    <p className="text-sm">Enter credentials to login</p>
                   </div>
                 </div>
                 <Button
@@ -951,8 +945,8 @@ export function TorrentSearch() {
                   </div>
                 </div>
 
-                {/* CAPTCHA - ONLY when image successfully downloaded */}
-                {showCaptcha && captchaImageLoaded && (
+                {/* CAPTCHA - image shown immediately, input shown after load */}
+                {showCaptcha && (
                   <div className="space-y-3 pt-2 border-t border-border/50">
                     <label className="text-sm font-medium">CAPTCHA</label>
                     <div className="space-y-2">
@@ -973,15 +967,16 @@ export function TorrentSearch() {
                           setCaptchaImageSrc(`/api/captcha?t=${Date.now()}`)
                         }}
                       />
-                      <Input
-                        id="captchaInput"
-                        className="pl-10 h-11"
-                        placeholder="Enter CAPTCHA digits"
-                        maxLength={6}
-                        value={captchaCode}
-                        onChange={(e) => setCaptchaCode(e.target.value)}
-                        disabled={!captchaImageLoaded}
-                      />
+                      {captchaImageLoaded && (
+                        <Input
+                          id="captchaInput"
+                          className="pl-10 h-11"
+                          placeholder="Enter CAPTCHA digits"
+                          maxLength={6}
+                          value={captchaCode}
+                          onChange={(e) => setCaptchaCode(e.target.value)}
+                        />
+                      )}
                     </div>
                   </div>
                 )}
@@ -1019,7 +1014,7 @@ export function TorrentSearch() {
                   ) : showCaptcha ? (
                     'Login with CAPTCHA'
                   ) : (
-                    'Login & Search'
+                    'Login'
                   )}
                 </Button>
 
@@ -1062,7 +1057,7 @@ export function TorrentSearch() {
                   </div>
                   <div className="whiteText">
                     <h2 className="text-2xl font-bold">Online-Fix Login</h2>
-                    <p className="text-sm">Enter credentials to test</p>
+                    <p className="text-sm">Enter credentials to login</p>
                   </div>
                 </div>
                 <Button
@@ -1130,7 +1125,7 @@ export function TorrentSearch() {
                       Logging in...
                     </>
                   ) : (
-                    'Test Login'
+                    'Login'
                   )}
                 </Button>
               </form>
