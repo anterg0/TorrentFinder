@@ -595,6 +595,8 @@ export function TorrentSearch() {
   const [hasSearched, setHasSearched] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // Auth modal state
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [authUsername, setAuthUsername] = useState('')
@@ -647,6 +649,20 @@ export function TorrentSearch() {
     checkAuthStatus()
   }, [])
 
+  // Auto-select RuTracker when auth is confirmed
+  useEffect(() => {
+    if (ruTrackerAuth) {
+      setTrackersToSearch(prev => prev.includes('rutracker') ? prev : [...prev, 'rutracker'])
+    }
+  }, [ruTrackerAuth])
+
+  // Cleanup blur timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current)
+    }
+  }, [])
+
 
   const handleMagnetClick = async (id: string) => {
     try {
@@ -675,11 +691,17 @@ export function TorrentSearch() {
   }
 
   const handleFocus = () => {
+    if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current)
     setIsFocused(true)
   }
 
   const handleBlur = () => {
-    setIsFocused(false)
+    if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current)
+    blurTimeoutRef.current = setTimeout(() => {
+      if (!searchQuery.trim()) {
+        setIsFocused(false)
+      }
+    }, 5000)
   }
 
   // Clear results when search query is emptied
@@ -909,7 +931,7 @@ export function TorrentSearch() {
                   onClick={() => setShowAuthModal(false)}
                   className="h-9 w-9 p-0 hover:bg-accent"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-4 w-4 text-foreground" />
                 </Button>
               </div>
 
@@ -1066,7 +1088,7 @@ export function TorrentSearch() {
                   onClick={() => setShowOnlineFixAuthModal(false)}
                   className="h-9 w-9 p-0 hover:bg-accent"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-4 w-4 text-foreground" />
                 </Button>
               </div>
 
@@ -1227,10 +1249,10 @@ export function TorrentSearch() {
                   }}
                   disabled={disabled}
                   className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
-                    selected
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : disabled
-                        ? 'bg-accent/30 text-muted-foreground border-border/30 cursor-not-allowed opacity-50'
+                    disabled
+                      ? 'bg-accent/30 text-muted-foreground border-border/30 cursor-not-allowed opacity-50'
+                      : selected
+                        ? 'bg-primary text-primary-foreground border-primary'
                         : 'bg-background text-foreground border-border/60 hover:bg-accent/50'
                   }`}
                 >
@@ -1262,17 +1284,6 @@ export function TorrentSearch() {
             </Button>
           </div>
 
-          <div className="relative h-8 mt-2">
-            {error && !isLoading && !showAuthModal && (
-              <motion.p
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-destructive text-sm text-center absolute inset-0 flex items-center justify-center"
-              >
-                {error}
-              </motion.p>
-            )}
-          </div>
         </motion.div>
       </motion.div>
 

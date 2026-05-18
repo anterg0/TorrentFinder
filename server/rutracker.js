@@ -7,6 +7,36 @@ import { CookieJar } from 'tough-cookie'
 import { wrapper } from 'axios-cookiejar-support'
 import { enrichResultWithTags, parseTagsFromTitle } from "../utils/torrentUtils.ts"
 
+function formatRuTrackerDate(raw) {
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December']
+  const ruMonths = { 'Янв':0,'Фев':1,'Мар':2,'Апр':3,'Май':4,'Июн':5,'Июл':6,'Авг':7,'Сен':8,'Окт':9,'Ноя':10,'Дек':11 }
+  const now = new Date()
+
+  if (raw.includes('Сегодня')) {
+    return `${now.getDate()} ${monthNames[now.getMonth()]} ${now.getFullYear()}`
+  }
+
+  if (raw.includes('Вчера')) {
+    const yesterday = new Date(now)
+    yesterday.setDate(yesterday.getDate() - 1)
+    return `${yesterday.getDate()} ${monthNames[yesterday.getMonth()]} ${yesterday.getFullYear()}`
+  }
+
+  const numMatch = raw.match(/(\d{1,2})-(\d{1,2})-(\d{2})/)
+  if (numMatch) {
+    const [, d, m, y] = numMatch
+    return `${parseInt(d)} ${monthNames[parseInt(m)-1]} ${2000+parseInt(y)}`
+  }
+
+  const ruMatch = raw.match(/(\d{1,2})-([А-Яа-я]{3})-(\d{2})/)
+  if (ruMatch) {
+    const [, d, m, y] = ruMatch
+    return `${parseInt(d)} ${monthNames[ruMonths[m]]} ${2000+parseInt(y)}`
+  }
+
+  return raw
+}
+
 export default class RuTracker {
   constructor() {
     this.baseURL = 'https://rutracker.org/forum/'
@@ -105,6 +135,24 @@ export default class RuTracker {
         console.error('⚠️ Failed to load RuTracker cookies:', err.message)
       }
     }
+  }
+
+  async clearCookies() {
+    this.jar = new CookieJar()
+    this.client = wrapper(axios.create({
+      baseURL: this.baseURL,
+      jar: this.jar,
+      withCredentials: true,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      },
+      responseType: 'arraybuffer'
+    }))
+    if (fs.existsSync(this.cookieFile)) {
+      fs.unlinkSync(this.cookieFile)
+    }
+    console.log('🗑️ RuTracker cookies cleared')
   }
 
   async isLoggedIn() {
@@ -221,8 +269,9 @@ export default class RuTracker {
 
         const id = idMatch[1]
 
-        const size = $(el).find('td').eq(5).text().trim()
-        const date = $(el).find('td').eq(9).text().trim()
+        const size = $(el).find('td').eq(5).text().trim().replace(/↓.*$/, '').trim()
+        const rawDate = $(el).find('td').eq(9).text().trim()
+        const date = formatRuTrackerDate(rawDate)
         const author = $(el).find('div.u-name a').text().trim()
         const seedAmount = $(el).find('b.seedmed').text().trim()
         const leechAmount = $(el).find('td.leechmed').text().trim()

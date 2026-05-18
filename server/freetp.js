@@ -99,6 +99,24 @@ export default class Freetp {
     }
   }
 
+  async clearCookies() {
+    this.jar = new CookieJar()
+    this.client = wrapper(axios.create({
+      baseURL: this.baseURL,
+      jar: this.jar,
+      withCredentials: true,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      },
+      responseType: 'arraybuffer'
+    }))
+    if (fs.existsSync(this.cookieFile)) {
+      fs.unlinkSync(this.cookieFile)
+    }
+    console.log('🗑️ Freetp cookies cleared')
+  }
+
   async isLoggedIn() {
     try {
       if (fs.existsSync(this.cookieFile)) {

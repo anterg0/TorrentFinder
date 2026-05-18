@@ -62,7 +62,7 @@ export function SettingsSidebar({
                   <div className="p-4 border border-border rounded-lg space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                        <div className={`w-3 h-3 rounded-full ${ruTrackerAuth ? 'bg-green-500' : 'bg-muted'}`}></div>
                         <span className="font-medium text-foreground">RuTracker</span>
                       </div>
                       <span className={`text-sm ${ruTrackerAuth ? 'text-green-400' : 'text-muted-foreground'}`}>

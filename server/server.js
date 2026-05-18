@@ -312,24 +312,13 @@ app.post('/api/logout/:service', async (req, res) => {
 
   try {
     if (service === 'rutracker') {
-      // Delete RuTracker cookies
-      if (ruTrackerClient.cookieFile) {
-        const fs = await import('fs')
-        fs.unlinkSync(ruTrackerClient.cookieFile)
-      }
+      await ruTrackerClient.clearCookies()
       res.json({ success: true })
     } else if (service === 'onlinefix') {
-      // Delete Online-Fix cookies
-      if (onlineFixClient.cookieFile) {
-        const fs = await import('fs')
-        fs.unlinkSync(onlineFixClient.cookieFile)
-      }
+      await onlineFixClient.clearCookies()
       res.json({ success: true })
     } else if (service === 'freetp') {
-      if (freetpClient.cookieFile) {
-        const fs = await import('fs')
-        fs.unlinkSync(freetpClient.cookieFile)
-      }
+      await freetpClient.clearCookies()
       res.json({ success: true })
     } else {
       res.status(400).json({ error: 'Unknown service' })
