@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
     "dev:frontend": "vite",
@@ -14,7 +15,33 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "server": "node server/server.js",
     "test:backend": "curl http://localhost:3001/api/health",
-    "fix-css": "node fix-css.js"
+    "fix-css": "node fix-css.js",
+    "electron:dev": "electron .",
+    "electron:build": "npm run build && electron-builder --win",
+    "electron:build:dir": "npm run build && electron-builder --win --dir"
+  },
+  "build": {
+    "appId": "com.torrentfinder.app",
+    "productName": "TorrentFinder",
+    "directories": {
+      "output": "release"
+    },
+    "asar": false,
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "server/**/*.js",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false,
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.3",
@@ -45,9 +72,13 @@
     "@radix-ui/react-tooltip": "^1.1.8",
     "axios": "^1.13.6",
     "axios-cookiejar-support": "^6.0.5",
+    "cheerio": "^1.2.0",
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",
+    "cors": "^2.8.5",
     "embla-carousel-react": "^8.6.0",
+    "express": "^4.18.2",
+    "http-cookie-agent": "^7.0.3",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.487.0",
     "motion": "^12.23.9",
@@ -70,13 +101,12 @@
     "@typescript-eslint/parser": "^6.14.0",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.21",
-    "cheerio": "^1.2.0",
     "concurrently": "^8.2.2",
-    "cors": "^2.8.5",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
     "eslint": "^8.55.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
-    "express": "^4.18.2",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.11",
     "typescript": "^5.2.2",

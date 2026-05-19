@@ -1186,8 +1186,8 @@ export function TorrentSearch() {
         onLogout={handleLogout}
       />
 
-      {/* Header Container */}
-      <div className="text-center pt-20 pb-8">
+       {/* Header Container */}
+      <div className="text-center z-10 relative" style={{ paddingTop: hasSearched ? '2rem' : '5rem', paddingBottom: hasSearched ? '0.5rem' : '2rem' }}>
         <motion.h1
           initial={{ opacity: 1 }}
           animate={{
@@ -1217,10 +1217,10 @@ export function TorrentSearch() {
       <motion.div
         initial={{ y: 0 }}
         animate={{
-          y: isFocused || hasSearched ? -240 : 0
+          y: isFocused ? -120 : (hasSearched ? -350 : 0)
         }}
         transition={{ duration: 0.6, ease: "easeInOut" }}
-        className="flex items-center justify-center min-h-[40vh]"
+        className="flex items-center justify-center min-h-[40vh] z-10 relative"
       >
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -1295,7 +1295,7 @@ export function TorrentSearch() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 50 }}
             transition={{ duration: 0.6, ease: "easeInOut" }}
-            className="fixed bottom-0 left-0 right-0 top-[180px] bg-background"
+            className="fixed bottom-0 left-0 right-0 top-[180px] bg-background z-20"
           >
             {results.length > 0 && !isLoading && !error && (
               <>

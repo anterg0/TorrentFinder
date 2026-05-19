@@ -38,4 +38,10 @@ pnpm-lock.yaml
 cookies.json
 cookiesRutracker.json
 cookiesOnlineFix.json
+cookiesFreetp.json
 *.bat
+
+# Electron
+release/
+out/
+*.asar

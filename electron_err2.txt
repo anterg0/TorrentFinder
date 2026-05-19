@@ -1,0 +1,2 @@
+[server] ❌ RuTracker login check error: Request failed with status code 521
+[server] ❌ RuTracker login check error: Request failed with status code 521

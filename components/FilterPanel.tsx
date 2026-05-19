@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Button } from './ui/button'
-import { Badge } from './ui/badge'
 import { motion, AnimatePresence } from 'motion/react'
 import { ChevronDown, X } from 'lucide-react'
 

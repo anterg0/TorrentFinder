@@ -328,6 +328,6 @@ app.post('/api/logout/:service', async (req, res) => {
   }
 })
 
-app.listen(3001, "0.0.0.0", () => {
+app.listen(process.env.PORT || 3001, "0.0.0.0", () => {
   console.log('🚀 Server running on http://localhost:3001')
 })

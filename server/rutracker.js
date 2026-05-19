@@ -5,7 +5,7 @@ import { TextDecoder } from 'util'
 
 import { CookieJar } from 'tough-cookie'
 import { wrapper } from 'axios-cookiejar-support'
-import { enrichResultWithTags, parseTagsFromTitle } from "../utils/torrentUtils.ts"
+import { enrichResultWithTags, parseTagsFromTitle } from "./torrentUtils.js"
 
 function formatRuTrackerDate(raw) {
   const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December']
