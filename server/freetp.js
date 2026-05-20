@@ -310,8 +310,6 @@ export default class Freetp {
       }
     })
 
-    await new Promise(resolve => setTimeout(resolve, 3000))
-
     const dlUrl = `https://freetp.org/engine/download.php?id=${fileId}&area=`
     const dlRes = await this.client.get(dlUrl, {
       responseType: 'arraybuffer',

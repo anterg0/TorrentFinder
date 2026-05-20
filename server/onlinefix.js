@@ -320,25 +320,8 @@ export default class OnlineFix {
   }
 
   /* =========================
-     MAGNET / DOWNLOAD
+     DOWNLOAD
   ========================= */
-
-  async getMagnetLink(topicId) {
-    try {
-      const res = await this.client.get(`?do=search&story=${encodeURIComponent(topicId)}`)
-      const html = this.decodeResponse(res.data, res.headers['content-type'])
-
-      const magnetMatch = html.match(/magnet:\?xt=urn:btih:[^"'\s]+/)
-      if (magnetMatch) return magnetMatch[0]
-
-      const $ = cheerio.load(html, { decodeEntities: false })
-      const magnet = $('a[href^="magnet:"]').attr('href')
-      return magnet || `https://online-fix.me/?do=search&story=${encodeURIComponent(topicId)}`
-    } catch (err) {
-      console.error('Error getting magnet link:', err.message)
-      return `https://online-fix.me/?do=search&story=${encodeURIComponent(topicId)}`
-    }
-  }
 
   async downloadTorrent(gameFolder, gamePageUrl = null) {
     try {

@@ -6,7 +6,8 @@ import { TorrentResultCard } from './TorrentResultCard'
 import { SettingsSidebar } from './SettingsSidebar'
 import { FilterPanel } from './FilterPanel'
 import { TorrentResult, enrichResultWithTags } from '../utils/torrentUtils'
-import { Search, User, Lock, X, Shield, Menu, ExternalLink, Download, Wrench, ArrowUp, ArrowDown } from 'lucide-react'
+import { Search, User, Lock, X, Shield, Menu, ExternalLink, Download, Wrench, ArrowUp, ArrowDown, ChevronDown } from 'lucide-react'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from './ui/collapsible'
 import axios from 'axios'
 import { toast } from 'sonner'
 // Collapsible components removed (not used) - kept UI simple
@@ -128,6 +129,7 @@ interface TorrentResultDetailsProps {
 function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick }: TorrentResultDetailsProps) {
   const isOnlineFix = result.tracker === 'Online-Fix'
   const isFreeTP = result.tracker == 'FreeTP'
+  const isRuTracker = result.tracker === 'RuTracker'
   const title = result.gameName || result.name
 
   // removed unused collapsible open state
@@ -136,7 +138,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
   const hasFetchedRef = useRef(false)
 
   useEffect(() => {
-    if ((isOnlineFix || isFreeTP) && result.url && !hasFetchedRef.current) {
+    if ((isOnlineFix || isFreeTP || isRuTracker) && result.url && !hasFetchedRef.current) {
       hasFetchedRef.current = true
       setIsLoadingDetails(true)
 
@@ -175,7 +177,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="relative z-10 mx-4 my-8 flex w-full max-w-4xl flex-col overflow-hidden rounded-[28px] border border-border/70 bg-card shadow-2xl max-h-[92vh]"
+        className={`relative z-10 mx-4 my-8 flex w-full ${isRuTracker ? 'max-w-6xl w-[92vw]' : 'max-w-4xl'} flex-col overflow-hidden rounded-[28px] border border-border/70 bg-card shadow-2xl max-h-[92vh]`}
       >
         {/* Header */}
         <div className="flex flex-col gap-4 border-b border-border/60 bg-background/95 p-6 backdrop-blur-sm sm:flex-row sm:items-start sm:justify-between flex-shrink-0">
@@ -230,7 +232,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
               )}
 
               {/* Loading State */}
-              {(isOnlineFix || isFreeTP) && isLoadingDetails && (
+              {(isOnlineFix || isFreeTP || isRuTracker) && isLoadingDetails && (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mb-4" />
                   <p className="text-muted-foreground">Loading game details...</p>
@@ -239,7 +241,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
               )}
 
               {/* Main Content */}
-              {((!isOnlineFix && !isFreeTP) || !isLoadingDetails) && (
+              {!isLoadingDetails && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -478,25 +480,59 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
                       )}
                     </div>
                   ) : (
-                    // RuTracker content
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="rounded-3xl border border-border/60 bg-accent/40 p-5">
-                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Release date</p>
-                        <p className="mt-2 text-lg font-semibold text-foreground">{result.uploadDate || 'Unknown'}</p>
-                      </div>
-                      <div className="rounded-3xl border border-border/60 bg-accent/40 p-5">
-                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">File size</p>
-                        <p className="mt-2 text-lg font-semibold text-foreground">{result.size}</p>
-                      </div>
-                    </div>
-                  )}
+                    // RuTracker Content
+                    <div className="space-y-4">
 
-                  {!isOnlineFix && !isFreeTP && (
-                    <div className="space-y-3 rounded-3xl border border-border/60 bg-background/80 p-5">
-                      <h3 className="text-lg font-semibold text-foreground">Description</h3>
-                      <p className="text-sm leading-7 text-muted-foreground">
-                        The torrent contains the selected release, including package contents and metadata. Use the buttons below to fetch the torrent file or open the magnet link in your preferred client.
-                      </p>
+                      {/* Update Info */}
+                      {enrichedResult.updateInfo && (
+                        <div className="rounded-3xl border border-border/60 bg-yellow-500/10 p-5">
+                          <p className="text-sm text-muted-foreground">{enrichedResult.updateInfo}</p>
+                        </div>
+                      )}
+
+                      {/* Dynamic Field Cards */}
+                      {enrichedResult.fields && Object.keys(enrichedResult.fields).length > 0 && (
+                        <div className="flex flex-wrap gap-3">
+                          {Object.entries(enrichedResult.fields).map(([label, value]) => (
+                            <div key={label} className="rounded-3xl border border-border/60 bg-accent/40 p-4 min-w-[140px] flex-1 basis-[160px]">
+                              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
+                              <p className="mt-2 text-sm font-semibold text-foreground break-words">{String(value)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Spoiler Sections */}
+                      {enrichedResult.spoilers && enrichedResult.spoilers.length > 0 && (
+                        <div className="space-y-3">
+                          {enrichedResult.spoilers.map((spoiler: { title: string; content: string }, i: number) => (
+                            <Collapsible key={i} className="rounded-3xl border border-border/60 bg-background/80 overflow-hidden">
+                              <CollapsibleTrigger className="flex w-full items-center justify-between p-5 text-left hover:bg-accent/40 transition-colors cursor-pointer">
+                                <span className="font-semibold text-foreground">{spoiler.title}</span>
+                                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform ui-open:rotate-180" />
+                              </CollapsibleTrigger>
+                              <CollapsibleContent className="border-t border-border/60">
+                                <div className="p-5 text-sm leading-7 text-muted-foreground whitespace-pre-wrap"
+                                     dangerouslySetInnerHTML={{ __html: spoiler.content }} />
+                              </CollapsibleContent>
+                            </Collapsible>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Original Post HTML */}
+                      {enrichedResult.postHtml && (
+                        <Collapsible className="rounded-3xl border border-border/60 bg-background/80 overflow-hidden">
+                          <CollapsibleTrigger className="flex w-full items-center justify-between p-5 text-left hover:bg-accent/40 transition-colors cursor-pointer">
+                            <span className="font-semibold text-foreground">Original Post</span>
+                            <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform ui-open:rotate-180" />
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="border-t border-border/60">
+                            <div className="p-5 text-sm leading-7 text-muted-foreground"
+                                 dangerouslySetInnerHTML={{ __html: enrichedResult.postHtml }} />
+                          </CollapsibleContent>
+                        </Collapsible>
+                      )}
                     </div>
                   )}
                 </motion.div>

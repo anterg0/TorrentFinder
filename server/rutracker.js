@@ -333,7 +333,8 @@ export default class RuTracker {
           tracker: 'RuTracker',
           seeds: seedAmount,
           leeches: leechAmount,
-          tags: extractedTags.flat()
+          tags: extractedTags.flat(),
+          url: `https://rutracker.org/forum/viewtopic.php?t=${id}`,
         })
       })
 
@@ -342,6 +343,93 @@ export default class RuTracker {
     } catch (err) {
       console.error('RuTracker search error:', err.message)
       throw err
+    }
+  }
+
+  /* =========================
+     DETAILS
+  ========================= */
+
+  async getDetails(topicId) {
+    try {
+      const res = await this.client.get(`viewtopic.php?t=${topicId}`)
+      const html = this.decodeResponse(res.data, res.headers['content-type'])
+      const $ = cheerio.load(html, { decodeEntities: false })
+
+      const details = {
+        fields: {},
+        spoilers: [],
+        postHtml: null,
+        updateInfo: null,
+      }
+
+      const $body = $('.post_body').first()
+      if (!$body.length) return details
+
+      // --- Structured fields from span.post-b ---
+      $body.find('span.post-b').each((_, el) => {
+        const $el = $(el)
+        const label = $el.text().trim()
+        let value = ''
+        const next = el.nextSibling
+        if (next && next.nodeType === 3) {
+          value = (next.data || next.textContent || '').replace(/^:\s*/, '').trim()
+        }
+        if (label && value) {
+          details.fields[label] = value
+        }
+      })
+
+      // --- Spoiler sections ---
+      $body.find('.sp-wrap').each((_, el) => {
+        const $sp = $(el)
+        const title = $sp.find('.sp-head').text().trim()
+        const $bodyContent = $sp.find('.sp-body')
+        $bodyContent.find('var.postImg').each((_, v) => {
+          const src = $(v).attr('title')
+          if (src) {
+            $(v).replaceWith(`<img src="${src}" alt="" style="max-width:100%">`)
+          } else {
+            $(v).remove()
+          }
+        })
+        let content = $bodyContent.html()?.trim()
+        if (title && content) {
+          details.spoilers.push({ title, content })
+        }
+      })
+
+      // --- Update info ---
+      const bodyText = $body.text()
+      const updateMatch = bodyText.match(/Раздача обновлена[^.]*\./)
+      if (updateMatch) details.updateInfo = updateMatch[0].trim()
+
+      // --- Post HTML (sanitized mock, spoilers removed) ---
+      const $cleanBody = $body.clone()
+      $cleanBody.find('.sp-wrap').remove()
+      $cleanBody.find('var.postImg').each((_, v) => {
+        const src = $(v).attr('title')
+        if (src) {
+          $(v).replaceWith(`<img src="${src}" alt="" style="max-width:100%">`)
+        } else {
+          $(v).remove()
+        }
+      })
+      $cleanBody.find('img.smile').remove()
+      $cleanBody.find('script').remove()
+      $cleanBody.find('*').each((_, el) => {
+        if (el.attribs) {
+          Object.keys(el.attribs).forEach(attr => {
+            if (/^on/i.test(attr)) delete el.attribs[attr]
+          })
+        }
+      })
+      details.postHtml = $cleanBody.html()?.trim() || null
+
+      return details
+    } catch (err) {
+      console.error('RuTracker getDetails error:', err.message)
+      return { fields: {}, spoilers: [], postHtml: null, updateInfo: null }
     }
   }
 

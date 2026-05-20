@@ -139,19 +139,8 @@ app.get('/api/magnet/:id', async (req, res) => {
 
   try {
     let magnet
-
-    if (id.startsWith('of-')) {
-      // Online-Fix result
-      const gameId = id.replace('of-', '')
-      magnet = await onlineFixClient.getMagnetLink(gameId)
-    } else if (id.startsWith('ft-')) {
-      // Freetp uses direct download, no magnet
-      return res.status(400).json({ error: 'Magnet links not available for Freetp' })
-    } else {
-      // RuTracker result
-      const rtId = id.replace('rt-', '')
-      magnet = await ruTrackerClient.getMagnetLink(rtId)
-    }
+    const rtId = id.replace('rt-', '')
+    magnet = await ruTrackerClient.getMagnetLink(rtId)
 
     res.json({ magnet })
   } catch (e) {
@@ -257,8 +246,8 @@ app.get('/api/details/:id', async (req, res) => {
 
     if (id.startsWith('of-')) {
       if (!url) {
-        return res.status(400).json({ 
-          error: 'Missing url parameter. Online-Fix details require the full page URL.' 
+        return res.status(400).json({
+          error: 'Missing url parameter. Online-Fix details require the full page URL.'
         })
       }
       details = await onlineFixClient.getDetails(url)
@@ -277,6 +266,9 @@ app.get('/api/details/:id', async (req, res) => {
         torrentAvailable: fileIds.torrentAvailable,
         fixAvailable: fileIds.fixAvailable
       }
+    } else if (id.startsWith('rt-')) {
+      const rtId = id.replace('rt-', '')
+      details = await ruTrackerClient.getDetails(rtId)
     }
 
     res.json(details)
