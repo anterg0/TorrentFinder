@@ -72,7 +72,7 @@ app.post('/api/auth', async (req, res) => {
 })
 
 /* =========================
-   🔍 SEARCH
+   SEARCH
 ========================= */
 
 app.get('/api/search', async (req, res) => {
@@ -92,9 +92,9 @@ app.get('/api/search', async (req, res) => {
       try {
         const ruTrackerResults = await ruTrackerClient.search(q)
         results.push(...ruTrackerResults)
-        console.log(`✅ RuTracker: ${ruTrackerResults.length} results`)
+        console.log(`RuTracker: ${ruTrackerResults.length} results`)
       } catch (err) {
-        console.log('⚠️ RuTracker search failed:', err.message)
+        console.log('RuTracker search failed:', err.message)
       }
     }
 
@@ -103,9 +103,9 @@ app.get('/api/search', async (req, res) => {
       try {
         const onlineFixResults = await onlineFixClient.search(q)
         results.push(...onlineFixResults)
-        console.log(`✅ Online-Fix: ${onlineFixResults.length} results`)
+        console.log(`Online-Fix: ${onlineFixResults.length} results`)
       } catch (err) {
-        console.log('⚠️ Online-Fix search failed:', err.message)
+        console.log('Online-Fix search failed:', err.message)
       }
     }
 
@@ -321,5 +321,5 @@ app.post('/api/logout/:service', async (req, res) => {
 })
 
 app.listen(3001, "0.0.0.0", () => {
-  console.log('🚀 Server running on http://localhost:3001')
+  console.log('Server running on http://localhost:3001')
 })

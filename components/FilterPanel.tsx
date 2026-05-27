@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import { Button } from './ui/button'
-import { Badge } from './ui/badge'
 import { motion, AnimatePresence } from 'motion/react'
 import { ChevronDown, X } from 'lucide-react'
 
 interface FilterPanelProps {
   trackers: Array<{ name: string; count: number }>
   tags: Array<{ name: string; count: number }>
+  authors: Array<{ name: string; count: number }>
   selectedTrackers: string[]
   selectedTags: string[]
+  selectedAuthors: string[]
   onTrackerToggle: (tracker: string) => void
+  onAuthorToggle: (author: string) => void
   onTagToggle: (tag: string) => void
   onClearAll: () => void
 }
@@ -17,15 +19,18 @@ interface FilterPanelProps {
 export function FilterPanel({
   trackers,
   tags,
+  authors,
   selectedTrackers,
   selectedTags,
+  selectedAuthors,
   onTrackerToggle,
+  onAuthorToggle,
   onTagToggle,
   onClearAll
 }: FilterPanelProps) {
   const [isOpen, setIsOpen] = useState(false)
 
-  const activeFilterCount = selectedTrackers.length + selectedTags.length
+  const activeFilterCount = selectedTrackers.length + selectedTags.length + selectedAuthors.length
 
   return (
     <div className="relative">
@@ -86,6 +91,29 @@ export function FilterPanel({
                 })}
               </div>
             </div>
+
+            {/* Authors Section */}
+            {authors.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-foreground mb-3">Authors</h3>
+                <div className="flex flex-wrap gap-2">
+                  {authors.map((author) => (
+                    <button
+                      key={author.name}
+                      onClick={() => onAuthorToggle(author.name)}
+                      className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        selectedAuthors.includes(author.name)
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-accent/40 text-foreground hover:bg-accent/60 border border-accent/60'
+                      }`}
+                    >
+                      {author.name}
+                      <span className="text-xs opacity-70">({author.count})</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Tags Section */}
             {tags.length > 0 && (

@@ -49,30 +49,12 @@ export default class OnlineFix {
       }
     }
 
-    console.log(`[Decoding] Using charset: ${charset}`)
-
     try {
       const decoder = new TextDecoder(charset, { fatal: false })
       return decoder.decode(data)
     } catch (err) {
       console.warn(`Failed to decode with ${charset}, falling back to utf-8`)
       return new TextDecoder('utf-8', { fatal: false }).decode(data)
-    }
-  }
-
-  debugLogEncoding(label, data, contentType = '') {
-    console.log(`\n=== DEBUG: ${label} ===`)
-    if (Buffer.isBuffer(data)) {
-      console.log(`Buffer size: ${data.length} bytes`)
-      console.log(`First 100 bytes (hex): ${data.slice(0, 100).toString('hex')}`)
-
-      const decoded = this.decodeResponse(data, contentType)
-      console.log(`Decoded string (first 300 chars): ${decoded.substring(0, 300)}`)
-      return decoded
-    } else if (typeof data === 'string') {
-      console.log(`String length: ${data.length} characters`)
-      console.log(`First 300 chars: ${data.substring(0, 300)}`)
-      return data
     }
   }
 
@@ -171,7 +153,7 @@ export default class OnlineFix {
     if (fs.existsSync(this.cookieFile)) {
       fs.unlinkSync(this.cookieFile)
     }
-    console.log('🗑️ Online-Fix cookies cleared')
+    console.log('Online-Fix cookies cleared')
   }
 
   async isLoggedIn() {
@@ -276,8 +258,6 @@ export default class OnlineFix {
 
       // === CRITICAL FIX ===
       const contentType = res.headers['content-type'] || ''
-      this.debugLogEncoding('Raw Search Response', res.data, contentType)
-
       const html = this.decodeResponse(res.data, contentType)
 
       const $ = cheerio.load(html, { decodeEntities: false })
@@ -311,7 +291,7 @@ export default class OnlineFix {
         })
       })
 
-      console.log(`✅ Online-Fix: ${results.length} results`)
+      console.log(`Online-Fix: ${results.length} results`)
       return results
     } catch (err) {
       console.error('Search error:', err.message)
@@ -368,7 +348,7 @@ export default class OnlineFix {
         headers: { 'Referer': dirUrl }
       })
 
-      console.log(`✅ Online-Fix: Downloaded ${torrentFilename} for ${gameFolder}`)
+      console.log(`Online-Fix: Downloaded ${torrentFilename} for ${gameFolder}`)
       return {
         response: torrentRes,
         filename: torrentFilename
@@ -420,7 +400,7 @@ export default class OnlineFix {
         headers: { 'Referer': repairDirUrl }
       })
 
-      console.log(`✅ Online-Fix: Downloaded repair ${rarFile} for ${gameFolder}`)
+      console.log(`Online-Fix: Downloaded repair ${rarFile} for ${gameFolder}`)
       return {
         response: rarRes,
         filename: rarFile
@@ -438,7 +418,7 @@ export default class OnlineFix {
 
   async getDetails(url) {
     try {
-      console.log(`🔍 Scraping Online-Fix: ${url}`)
+      console.log(`Scraping Online-Fix: ${url}`)
 
       const res = await this.client.get(url, {
         headers: {
@@ -513,7 +493,7 @@ export default class OnlineFix {
         details.updateInfo = $editedBlock.text().trim()
       }
 
-      console.log(`✅ Scraped successfully | Update: ${!!details.updateInfo}`)
+      console.log(`Scraped successfully | Update: ${!!details.updateInfo}`)
       return details
 
     } catch (err) {

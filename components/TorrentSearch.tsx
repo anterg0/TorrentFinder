@@ -59,36 +59,28 @@ export function sortResults(results: TorrentResult[], sortBy: SortOption, direct
 // Updated search function with auth awareness
 export async function searchTorrents(query: string, trackers: string[] = ['rutracker', 'onlinefix', 'freetp']): Promise<TorrentResult[]> {
   try {
-    console.log(`Searching for: "${query}" with trackers: ${trackers.join(',')}`)
-
-    const healthResponse = await axios.get('http://localhost:3001/api/health', {
-      timeout: 5000
-    })
-    console.log('Server health check:', healthResponse.data)
-
     const response = await axios.get(`http://localhost:3001/api/search`, {
       params: { q: query, trackers: trackers.join(',') },
       timeout: 45000
     })
 
-    console.log('Search response:', response.data)
     return response.data
   } catch (error) {
     console.error('Search API error:', error)
     if (axios.isAxiosError(error)) {
       if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
-        throw new Error('❌ Backend server is not running.\n\nPlease run: npm run dev:backend\n\nOr start both servers with: npm run dev')
+        throw new Error('Backend server is not running.\n\nPlease run: npm run dev:backend\n\nOr start both servers with: npm run dev')
       } else if (error.code === 'ECONNABORTED') {
-        throw new Error('⏱️ Search timed out. RuTracker might be slow or blocking requests. Try again in a few minutes.')
+        throw new Error('Search timed out. RuTracker might be slow or blocking requests. Try again in a few minutes.')
       } else if (error.response?.status === 401) {
-        throw new Error('🔐 RuTracker authentication required')
+        throw new Error('RuTracker authentication required')
       } else if (error.response?.status === 400) {
-        throw new Error('❌ Invalid search query. Please try different search terms.')
+        throw new Error('Invalid search query. Please try different search terms.')
       } else if (error.response?.status === 500) {
-        throw new Error('❌ Server error occurred while searching. Please try again.')
+        throw new Error('Server error occurred while searching. Please try again.')
       }
     }
-    throw new Error('❌ Failed to search torrents. Please check your internet connection and try again.')
+    throw new Error('Failed to search torrents. Please check your internet connection and try again.')
   }
 }
 
@@ -627,6 +619,7 @@ export function TorrentSearch() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedTrackers, setSelectedTrackers] = useState<string[]>([])
+  const [selectedAuthors, setSelectedAuthors] = useState<string[]>([])
   const [isFocused, setIsFocused] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -761,6 +754,18 @@ export function TorrentSearch() {
     return Object.entries(trackerCounts).map(([name, count]) => ({ name, count })).sort()
   }, [results])
 
+  const availableAuthors = useMemo(() => {
+    const authorCounts = results.reduce((acc, result) => {
+      if (result.tracker === 'Online-Fix' || result.tracker === 'FreeTP') return acc
+      const author = result.author?.trim()
+      if (author) {
+        acc[author] = (acc[author] || 0) + 1
+      }
+      return acc
+    }, {} as Record<string, number>)
+    return Object.entries(authorCounts).map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name))
+  }, [results])
+
   const filteredResults = useMemo(() => {
     let filtered = results
 
@@ -774,8 +779,13 @@ export function TorrentSearch() {
       filtered = filtered.filter((result) => result.tags?.some((tag) => selectedTags.includes(tag)))
     }
 
+    // Filter by authors
+    if (selectedAuthors.length > 0) {
+      filtered = filtered.filter((result) => result.author && selectedAuthors.includes(result.author))
+    }
+
     return filtered
-  }, [results, selectedTrackers, selectedTags])
+  }, [results, selectedTrackers, selectedTags, selectedAuthors])
 
   const showResults = hasSearched || isLoading || error
   const sortedResults = sortResults(filteredResults, sortBy, sortDirection)
@@ -792,9 +802,16 @@ export function TorrentSearch() {
     )
   }
 
+  const toggleAuthorFilter = (author: string) => {
+    setSelectedAuthors((current) =>
+      current.includes(author) ? current.filter((item) => item !== author) : [...current, author]
+    )
+  }
+
   const clearAllFilters = () => {
     setSelectedTags([])
     setSelectedTrackers([])
+    setSelectedAuthors([])
   }
 
   const handleSearch = async () => {
@@ -828,7 +845,7 @@ export function TorrentSearch() {
       setError(errorMessage)
 
       // Show auth modal for 401 errors
-      if (errorMessage.includes('authentication required') || errorMessage.includes('🔐')) {
+      if (errorMessage.includes('authentication required')) {
         setShowAuthModal(true)
       }
     } finally {
@@ -1075,14 +1092,6 @@ export function TorrentSearch() {
                     'Login'
                   )}
                 </Button>
-
-                <p className="text-xs text-center">
-                  {!showCaptcha
-                    ? "Login will show CAPTCHA if needed"
-                    : captchaImageLoaded
-                      ? "Click CAPTCHA to refresh"
-                      : "Loading CAPTCHA image..."}
-                </p>
               </form>
             </motion.div>
           </motion.div>
@@ -1349,8 +1358,11 @@ export function TorrentSearch() {
                       count: results.filter(r => r.tags?.includes(tag)).length
                     }))}
                     selectedTrackers={selectedTrackers}
+                    authors={availableAuthors}
+                    selectedAuthors={selectedAuthors}
                     selectedTags={selectedTags}
                     onTrackerToggle={toggleTrackerFilter}
+                    onAuthorToggle={toggleAuthorFilter}
                     onTagToggle={toggleTagFilter}
                     onClearAll={clearAllFilters}
                   />

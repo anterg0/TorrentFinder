@@ -41,30 +41,12 @@ export default class Freetp {
       }
     }
 
-    console.log(`[Decoding] Using charset: ${charset}`)
-
     try {
       const decoder = new TextDecoder(charset, { fatal: false })
       return decoder.decode(data)
     } catch (err) {
       console.warn(`Failed to decode with ${charset}, falling back to utf-8`)
       return new TextDecoder('utf-8', { fatal: false }).decode(data)
-    }
-  }
-
-  debugLogEncoding(label, data, contentType = '') {
-    console.log(`\n=== DEBUG: ${label} ===`)
-    if (Buffer.isBuffer(data)) {
-      console.log(`Buffer size: ${data.length} bytes`)
-      console.log(`First 100 bytes (hex): ${data.slice(0, 100).toString('hex')}`)
-
-      const decoded = this.decodeResponse(data, contentType)
-      console.log(`Decoded string (first 300 chars): ${decoded.substring(0, 300)}`)
-      return decoded
-    } else if (typeof data === 'string') {
-      console.log(`String length: ${data.length} characters`)
-      console.log(`First 300 chars: ${data.substring(0, 300)}`)
-      return data
     }
   }
 
@@ -114,7 +96,7 @@ export default class Freetp {
     if (fs.existsSync(this.cookieFile)) {
       fs.unlinkSync(this.cookieFile)
     }
-    console.log('🗑️ Freetp cookies cleared')
+    console.log('Freetp cookies cleared')
   }
 
   async isLoggedIn() {
@@ -213,8 +195,6 @@ export default class Freetp {
       })
 
       const contentType = res.headers['content-type'] || ''
-      this.debugLogEncoding('Raw Search Response', res.data, contentType)
-
       const html = this.decodeResponse(res.data, contentType)
 
       const $ = cheerio.load(html, { decodeEntities: false })

@@ -79,8 +79,6 @@ export default class RuTracker {
       if (match) charset = match[1].toLowerCase()
     }
 
-    console.log(`[RuTracker] Decoding with charset: ${charset}`)
-
     try {
       const decoder = new TextDecoder(charset, { fatal: false })
       return decoder.decode(data)
@@ -88,15 +86,6 @@ export default class RuTracker {
       console.warn(`Failed to decode with ${charset}, falling back to utf-8`)
       return new TextDecoder('utf-8', { fatal: false }).decode(data)
     }
-  }
-
-  debugLog(label, data, contentType = '') {
-    if (!Buffer.isBuffer(data)) return
-    console.log(`\n=== DEBUG ${label} ===`)
-    console.log(`Size: ${data.length} bytes`)
-    console.log(`First 80 bytes (hex): ${data.slice(0, 80).toString('hex')}`)
-    const decoded = this.decodeResponse(data, contentType)
-    console.log(`Decoded preview: ${decoded.substring(0, 300)}...`)
   }
 
   /* =========================
@@ -107,9 +96,9 @@ export default class RuTracker {
     try {
       const serialized = this.jar.serializeSync()
       fs.writeFileSync(this.cookieFile, JSON.stringify(serialized, null, 2))
-      console.log('💾 RuTracker cookies saved')
+      console.log('RuTracker cookies saved')
     } catch (err) {
-      console.error('❌ Failed to save cookies:', err.message)
+      console.error('Failed to save cookies:', err.message)
     }
   }
 
@@ -130,9 +119,9 @@ export default class RuTracker {
           responseType: 'arraybuffer'
         }))
 
-        console.log('✅ RuTracker cookies loaded')
+        console.log('RuTracker cookies loaded')
       } catch (err) {
-        console.error('⚠️ Failed to load RuTracker cookies:', err.message)
+        console.error('Failed to load RuTracker cookies:', err.message)
       }
     }
   }
@@ -152,7 +141,7 @@ export default class RuTracker {
     if (fs.existsSync(this.cookieFile)) {
       fs.unlinkSync(this.cookieFile)
     }
-    console.log('🗑️ RuTracker cookies cleared')
+    console.log('RuTracker cookies cleared')
   }
 
   async isLoggedIn() {
@@ -160,10 +149,10 @@ export default class RuTracker {
       const res = await this.client.get('index.php')
       const html = this.decodeResponse(res.data, res.headers['content-type'])
       const isLogged = html.includes('logout') || html.includes('Выход')
-      console.log(`✅ RuTracker: ${isLogged ? 'Logged in' : 'Not logged in'}`)
+      console.log(`RuTracker: ${isLogged ? 'Logged in' : 'Not logged in'}`)
       return isLogged
     } catch (err) {
-      console.error('❌ RuTracker login check error:', err.message)
+      console.error('RuTracker login check error:', err.message)
       return false
     }
   }
@@ -223,14 +212,14 @@ export default class RuTracker {
       const html = this.decodeResponse(res.data, res.headers['content-type'])
 
       if (html.includes('logout') || html.includes('Выход')) {
-        console.log('✅ RuTracker: Successfully logged in')
+        console.log('RuTracker: Successfully logged in')
         this.clearCaptcha()
         this.saveCookies()
         return { success: true }
       }
 
       if (this.parseCaptcha(html)) {
-        console.log('⚠️ RuTracker: CAPTCHA required')
+        console.log('RuTracker: CAPTCHA required')
         return { success: false, captcha: true }
       }
 
@@ -250,8 +239,6 @@ export default class RuTracker {
       const res = await this.client.get(`tracker.php?nm=${encodeURIComponent(query)}`)
 
       const contentType = res.headers['content-type'] || ''
-      this.debugLog('Search Response', res.data, contentType)
-
       const html = this.decodeResponse(res.data, contentType)
       const $ = cheerio.load(html, { decodeEntities: false })
 
@@ -338,7 +325,7 @@ export default class RuTracker {
         })
       })
 
-      console.log(`✅ RuTracker: ${results.length} results found`)
+      console.log(`RuTracker: ${results.length} results found`)
       return results
     } catch (err) {
       console.error('RuTracker search error:', err.message)
