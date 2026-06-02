@@ -827,10 +827,6 @@ export function TorrentSearch() {
       const enrichedResults = searchResults.map(result => enrichResultWithTags(result))
       setResults(enrichedResults)
 
-      if (enrichedResults.length === 0) {
-        setError('No results found. Try a different search term.')
-      }
-
       // Remind user about login on each search
       if (!ruTrackerAuth && trackersToSearch.includes('rutracker')) {
         toast.info('Log in to RuTracker to search through it', { id: 'rutracker-reminder', duration: 3000 })
@@ -1457,16 +1453,27 @@ export function TorrentSearch() {
                       </motion.div>
                     ) : searchQuery && !isLoading && !error ? (
                       <motion.div
-                        key="no-results"
+                        key={results.length > 0 ? 'filtered-out' : 'no-results'}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         className="text-center py-12"
                       >
-                        <p className="text-muted-foreground">No results found for "{searchQuery}"</p>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          Try different keywords or check your spelling
-                        </p>
+                        {results.length > 0 ? (
+                          <>
+                            <p className="text-muted-foreground">No results match the current filters</p>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Try adjusting your filter selection
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-muted-foreground">No results found for "{searchQuery}"</p>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Try different keywords or check your spelling
+                            </p>
+                          </>
+                        )}
                       </motion.div>
                     ) : null}
                   </AnimatePresence>

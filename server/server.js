@@ -120,10 +120,6 @@ app.get('/api/search', async (req, res) => {
       }
     }
 
-    if (results.length === 0) {
-      return res.status(404).json({ error: 'No results found' })
-    }
-
     res.json(results)
   } catch (e) {
     res.status(500).json({ error: e.message })
