@@ -156,7 +156,7 @@ export function SettingsSidebar({
                         disabled
                       >
                         <User className="h-4 w-4 mr-2" />
-                        Coming Soon
+                        Temporarily Removed
                       </Button>
                     )}
                   </div>

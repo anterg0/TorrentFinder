@@ -102,6 +102,15 @@ app.get('/api/search', async (req, res) => {
     if (!requestedTrackers || requestedTrackers.includes('onlinefix')) {
       try {
         const onlineFixResults = await onlineFixClient.search(q)
+        // Pre-scrape details for all Online-Fix results
+        await Promise.all(onlineFixResults.map(async (r) => {
+          try {
+            const details = await onlineFixClient.getDetails(r.url)
+            Object.assign(r, details)
+          } catch (e) {
+            // ignore individual scrape failures
+          }
+        }))
         results.push(...onlineFixResults)
         console.log(`Online-Fix: ${onlineFixResults.length} results`)
       } catch (err) {
@@ -113,6 +122,17 @@ app.get('/api/search', async (req, res) => {
     if (!requestedTrackers || requestedTrackers.includes('freetp')) {
       try {
         const freetpResults = await freetpClient.search(q)
+        // Pre-scrape details for all FreeTP results
+        await Promise.all(freetpResults.map(async (r) => {
+          try {
+            const pageDetails = await freetpClient.getDetails(r.url)
+            Object.assign(r, pageDetails)
+            const fileIds = await freetpClient.getFileIds(r.url)
+            Object.assign(r, fileIds)
+          } catch (e) {
+            // ignore individual scrape failures
+          }
+        }))
         results.push(...freetpResults)
         console.log(`Freetp: ${freetpResults.length} results`)
       } catch (err) {

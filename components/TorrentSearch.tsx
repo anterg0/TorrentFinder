@@ -116,9 +116,10 @@ interface TorrentResultDetailsProps {
   onClose: () => void
   onMagnetClick: (id: string) => void
   onDownloadClick: (id: string, type?: 'torrent' | 'repair') => void
+  onlineFixAuth: boolean
 }
 
-function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick }: TorrentResultDetailsProps) {
+function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick, onlineFixAuth }: TorrentResultDetailsProps) {
   const isOnlineFix = result.tracker === 'Online-Fix'
   const isFreeTP = result.tracker == 'FreeTP'
   const isRuTracker = result.tracker === 'RuTracker'
@@ -152,6 +153,49 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
 
   // Merge the result with fetched details
   const enrichedResult = { ...result, ...details }
+
+  function FieldCard({ label, value }: { label: string; value: string }) {
+    const [isHovered, setIsHovered] = useState(false)
+    const cardRef = useRef<HTMLDivElement>(null)
+    const [pos, setPos] = useState({ top: 0, left: 0 })
+    const str = String(value)
+    const truncated = str.length > 50 ? str.slice(0, 50) + '...' : str
+
+    useEffect(() => {
+      if (isHovered && cardRef.current) {
+        const r = cardRef.current.getBoundingClientRect()
+        const pw = 320
+        setPos({
+          top: r.bottom + 4,
+          left: Math.max(8, Math.min(r.left, window.innerWidth - pw - 8))
+        })
+      }
+    }, [isHovered])
+
+    return (
+      <div
+        ref={cardRef}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        className="rounded-3xl border border-border/60 bg-accent/40 p-4 min-w-[140px] flex-1 basis-[160px] relative"
+      >
+        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
+        <p className="mt-2 text-sm font-semibold text-foreground break-words">{truncated}</p>
+        {str.length > 30 && isHovered && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.15 }}
+            className="fixed z-50 rounded-xl border border-border/60 bg-card shadow-xl p-4 max-w-[320px] pointer-events-none"
+            style={{ top: pos.top, left: pos.left }}
+          >
+            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1">{label}</p>
+            <p className="text-sm font-semibold text-foreground break-words">{str}</p>
+          </motion.div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <motion.div
@@ -195,7 +239,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
             <section className="space-y-5">
 
               {/* Update Info - Appears FIRST */}
-              {enrichedResult.updateInfo && (
+              {enrichedResult.updateInfo && !isRuTracker && (
                 <motion.div
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -475,21 +519,13 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
                     // RuTracker Content
                     <div className="space-y-4">
 
-                      {/* Update Info */}
-                      {enrichedResult.updateInfo && (
-                        <div className="rounded-3xl border border-border/60 bg-yellow-500/10 p-5">
-                          <p className="text-sm text-muted-foreground">{enrichedResult.updateInfo}</p>
-                        </div>
-                      )}
-
                       {/* Dynamic Field Cards */}
                       {enrichedResult.fields && Object.keys(enrichedResult.fields).length > 0 && (
                         <div className="flex flex-wrap gap-3">
-                          {Object.entries(enrichedResult.fields).map(([label, value]) => (
-                            <div key={label} className="rounded-3xl border border-border/60 bg-accent/40 p-4 min-w-[140px] flex-1 basis-[160px]">
-                              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
-                              <p className="mt-2 text-sm font-semibold text-foreground break-words">{String(value)}</p>
-                            </div>
+                          {Object.entries(enrichedResult.fields).filter(([label]) =>
+                            !/обновлен/i.test(label)
+                          ).map(([label, value]) => (
+                            <FieldCard key={label} label={label} value={String(value)} />
                           ))}
                         </div>
                       )}
@@ -549,7 +585,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
                       window.location.href = `http://localhost:3001/api/download/${enrichedResult.id}?${params.toString()}`
                     }
                   }}
-                  disabled={isFreeTP ? !enrichedResult.fixAvailable : !enrichedResult.gameName || !enrichedResult.url}
+                  disabled={isFreeTP ? !enrichedResult.fixAvailable : !enrichedResult.gameName || !enrichedResult.url || (isOnlineFix && !onlineFixAuth)}
                   className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2"
                 >
                   <Wrench className="h-4 w-4" />
@@ -567,7 +603,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
                       window.location.href = `http://localhost:3001/api/download/${enrichedResult.id}?${params.toString()}`
                     }
                   }}
-                  disabled={isFreeTP ? !enrichedResult.torrentAvailable : !enrichedResult.gameName || !enrichedResult.url}
+                  disabled={isFreeTP ? !enrichedResult.torrentAvailable : !enrichedResult.gameName || !enrichedResult.url || (isOnlineFix && !onlineFixAuth)}
                   className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2"
                 >
                   <Download className="h-4 w-4" />
@@ -590,17 +626,27 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
               <div className="col-span-3 flex flex-col sm:flex-row justify-center gap-3 items-center">
                 <Button
                   onClick={() => onDownloadClick(enrichedResult.id, 'torrent')}
-                  className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2 w-full sm:w-[280px]"
+                  className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2 w-full sm:w-[200px]"
                 >
                   <Download className="h-4 w-4" />
                   Download .torrent
                 </Button>
                 <Button
                   onClick={() => onMagnetClick(enrichedResult.id)}
-                  className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2 w-full sm:w-[280px]"
+                  className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2 w-full sm:w-[200px]"
                 >
                   <ExternalLink className="h-4 w-4" />
                   Magnet Link
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (enrichedResult.url) window.open(enrichedResult.url, '_blank')
+                  }}
+                  disabled={!enrichedResult.url}
+                  className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2 w-full sm:w-[200px]"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Open Webpage
                 </Button>
               </div>
             )}
@@ -652,6 +698,28 @@ export function TorrentSearch() {
   const [onlineFixAuth, setOnlineFixAuth] = useState(false)
   const [freeTpAuth, setFreeTpAuth] = useState(false)
   const [trackersToSearch, setTrackersToSearch] = useState<string[]>(['rutracker', 'onlinefix', 'freetp'])
+
+  // Clear auth modal fields when opening
+  useEffect(() => {
+    if (showAuthModal) {
+      setAuthUsername('')
+      setAuthPassword('')
+      setCaptchaCode('')
+      setAuthError('')
+      setCaptchaError('')
+      setShowCaptcha(false)
+      setCaptchaImageLoaded(false)
+      setCaptchaImageSrc('/api/captcha')
+    }
+  }, [showAuthModal])
+
+  useEffect(() => {
+    if (showOnlineFixAuthModal) {
+      setOnlineFixUsername('')
+      setOnlineFixPassword('')
+      setOnlineFixAuthError('')
+    }
+  }, [showOnlineFixAuthModal])
 
   // Check auth status on mount
   useEffect(() => {
@@ -1433,17 +1501,17 @@ export function TorrentSearch() {
                         exit={{ opacity: 0 }}
                         className="space-y-4"
                       >
-                        {sortedResults.map((result, index) => (
+                        {sortedResults.map((result) => (
                           <motion.div
                             key={result.id}
-                            layout
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.03 }}
+                            transition={{ duration: 0.15 }}
                           >
                             <TorrentResultCard
                               result={result}
                               isPlaceholder={false}
+                              onlineFixAuth={onlineFixAuth}
                               onMagnetClick={handleMagnetClick}
                               onDownloadClick={handleDownloadClick}
                               onOpenDetails={handleOpenDetails}
@@ -1493,6 +1561,7 @@ export function TorrentSearch() {
             onClose={handleCloseDetails}
             onMagnetClick={handleMagnetClick}
             onDownloadClick={handleDownloadClick}
+            onlineFixAuth={onlineFixAuth}
           />
         )}
       </AnimatePresence>
