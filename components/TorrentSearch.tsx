@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react'
 import { TorrentResultCard } from './TorrentResultCard'
 import { SettingsSidebar } from './SettingsSidebar'
 import { FilterPanel } from './FilterPanel'
+import { LatestUpdates } from './LatestUpdates'
 import { TorrentResult, enrichResultWithTags } from '../utils/torrentUtils'
 import { Search, User, Lock, X, Shield, Menu, ExternalLink, Download, Wrench, ArrowUp, ArrowDown, ChevronDown } from 'lucide-react'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from './ui/collapsible'
@@ -698,6 +699,7 @@ export function TorrentSearch() {
   const [onlineFixAuth, setOnlineFixAuth] = useState(false)
   const [freeTpAuth, setFreeTpAuth] = useState(false)
   const [trackersToSearch, setTrackersToSearch] = useState<string[]>(['rutracker', 'onlinefix', 'freetp'])
+  const [latestTab, setLatestTab] = useState<'onlinefix' | 'freetp'>('onlinefix')
 
   // Clear auth modal fields when opening
   useEffect(() => {
@@ -1395,6 +1397,15 @@ export function TorrentSearch() {
 
         </motion.div>
       </motion.div>
+
+      {/* Latest Updates - visible when not searching */}
+      {!showResults && (
+        <LatestUpdates
+          activeTab={latestTab}
+          onTabChange={setLatestTab}
+          onOpenDetails={handleOpenDetails}
+        />
+      )}
 
       {/* Results Container */}
       <AnimatePresence>

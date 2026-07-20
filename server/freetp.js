@@ -439,4 +439,58 @@ export default class Freetp {
 
     return details
   }
+
+  async getLatest(page = 0) {
+    try {
+      const url = page <= 1 ? '' : `page/${page}/`
+      const res = await this.client.get(url)
+      const html = this.decodeResponse(res.data, res.headers['content-type'] || '')
+      const $ = cheerio.load(html, { decodeEntities: false })
+      const items = []
+
+      $('div.base').each((_, base) => {
+        const $base = $(base)
+
+        const titleLink = $base.find('.header-h1 a')
+        const itemUrl = titleLink.attr('href') || ''
+        const title = $base.find('.header-h1 h1').text().replace(/&nbsp;/g, ' ').trim()
+        const idMatch = itemUrl.match(/(\d+)-/)
+        const id = idMatch ? `ft-latest-${idMatch[1]}` : `ft-latest-${items.length}`
+
+        const firstImg = $base.find('.maincont img').first()
+        let image = firstImg.attr('src') || ''
+        if (image && !image.startsWith('http')) {
+          image = `https://freetp.org${image}`
+        }
+
+        const dateText = $base.find('div[style*="position: relative"] span').text().trim()
+
+        const mlink = $base.find('.mlink')
+        const mlinkText = mlink.text()
+        const authorMatch = mlinkText.match(/Автор:\s*([^\s|]+)/)
+        const author = authorMatch ? authorMatch[1] : ''
+        const categoryMatch = mlinkText.match(/Категория:\s*([^\s|]+)/)
+        const category = categoryMatch ? categoryMatch[1] : ''
+
+        items.push({
+          id,
+          title,
+          url: itemUrl.startsWith('http') ? itemUrl : `https://freetp.org${itemUrl}`,
+          image,
+          date: dateText,
+          author,
+          category,
+          tracker: 'FreeTP'
+        })
+      })
+
+      return { items, hasMore: items.length > 0 }
+    } catch (e) {
+      if (e.response && e.response.status === 404) {
+        return { items: [], hasMore: false }
+      }
+      console.error('FreeTP latest fetch error:', e.message)
+      return { items: [], hasMore: false }
+    }
+  }
 }

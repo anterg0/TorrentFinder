@@ -336,6 +336,51 @@ app.post('/api/logout/:service', async (req, res) => {
   }
 })
 
+/* =========================
+   LATEST UPDATES
+========================= */
+
+app.get('/api/latest/:tracker', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 0
+    let result
+    if (req.params.tracker === 'onlinefix') {
+      result = await onlineFixClient.getLatest(page)
+    } else if (req.params.tracker === 'freetp') {
+      result = await freetpClient.getLatest(page)
+    } else {
+      return res.status(400).json({ error: 'Unknown tracker' })
+    }
+    res.json(result)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+/* =========================
+   IMAGE PROXY
+========================= */
+
+app.get('/api/proxy-image', async (req, res) => {
+  try {
+    const { url } = req.query
+    if (!url) return res.status(400).end()
+    const response = await axios.get(url, {
+      responseType: 'stream',
+      headers: {
+        'Referer': 'https://online-fix.me/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    })
+    if (response.headers['content-type']) {
+      res.set('Content-Type', response.headers['content-type'])
+    }
+    response.data.pipe(res)
+  } catch (e) {
+    res.status(500).end()
+  }
+})
+
 app.listen(3001, "0.0.0.0", () => {
   console.log('Server running on http://localhost:3001')
 })

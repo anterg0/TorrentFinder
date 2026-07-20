@@ -28,13 +28,6 @@ export default class OnlineFix {
     this.loadCookies()
   }
 
-  /* =========================
-     DECODING (FIXED)
-  ========================= */
-
-  /**
-   * Decode response using the charset from Content-Type header
-   */
   decodeResponse(data, contentType = '') {
     if (!Buffer.isBuffer(data)) {
       return typeof data === 'string' ? data : String(data)
@@ -513,4 +506,76 @@ export default class OnlineFix {
       }
     }
   }
+
+  async getLatest(showMore = 0) {
+    try {
+      let html
+      if (showMore === 0) {
+        const res = await this.client.get('')
+        html = this.decodeResponse(res.data, res.headers['content-type'] || '')
+      } else {
+        const res = await this.client.post('', `show_more=${showMore}`, {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json, text/javascript, */*; q=0.01'
+          }
+        })
+        try {
+          const parsed = JSON.parse(typeof res.data === 'string' ? res.data : this.decodeResponse(res.data, res.headers['content-type'] || ''))
+          html = parsed.posts || parsed.html || parsed.content || ''
+        } catch {
+          html = typeof res.data === 'string' ? res.data : this.decodeResponse(res.data, res.headers['content-type'] || '')
+        }
+      }
+
+      const $ = cheerio.load(html, { decodeEntities: false })
+      const items = []
+
+      $('article.news').each((_, article) => {
+        const $article = $(article)
+
+        const url = $article.find('a.big-link').attr('href') || ''
+        const idMatch = url.match(/(\d+)-/)
+        const id = idMatch ? `of-latest-${idMatch[1]}` : `of-latest-${items.length}`
+
+        const title = $article.find('h2.title').text().trim()
+        const image = $article.find('.img img.lazyload').attr('data-src') || ''
+        const imageUrl = image ? `/api/proxy-image?url=${encodeURIComponent(image)}` : ''
+        const date = $article.find('.info-date time').text().trim()
+        const editInfo = $article.find('.edit').text().trim()
+
+        const previewHtml = $article.find('.preview-text').html() || ''
+        const releaseDate = extractField(previewHtml, ['Дата выхода:', 'Game release:'])
+        const playVia = extractField(previewHtml, ['Игра через:', 'Play via:'])
+
+        items.push({
+          id,
+          title,
+          url,
+          image: imageUrl,
+          date,
+          editInfo: editInfo.replace(/&nbsp;/g, ' ').trim(),
+          releaseDate: releaseDate.replace(/&nbsp;/g, ' ').trim(),
+          playVia: playVia.replace(/&nbsp;/g, ' ').trim(),
+          tracker: 'Online-Fix'
+        })
+      })
+
+      return { items, hasMore: items.length > 0 }
+    } catch (e) {
+      console.error('Online-Fix latest fetch error:', e.message)
+      return { items: [], hasMore: false }
+    }
+  }
+}
+
+function extractField(html, labels) {
+  for (const label of labels) {
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp(escaped + '\\s*([^<\\n]+)')
+    const match = html.match(regex)
+    if (match) return match[1].trim()
+  }
+  return ''
 }
