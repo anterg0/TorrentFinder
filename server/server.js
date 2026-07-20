@@ -72,7 +72,7 @@ app.post('/api/auth', async (req, res) => {
 })
 
 /* =========================
-   🔍 SEARCH
+   SEARCH
 ========================= */
 
 app.get('/api/search', async (req, res) => {
@@ -92,9 +92,9 @@ app.get('/api/search', async (req, res) => {
       try {
         const ruTrackerResults = await ruTrackerClient.search(q)
         results.push(...ruTrackerResults)
-        console.log(`✅ RuTracker: ${ruTrackerResults.length} results`)
+        console.log(`RuTracker: ${ruTrackerResults.length} results`)
       } catch (err) {
-        console.log('⚠️ RuTracker search failed:', err.message)
+        console.log('RuTracker search failed:', err.message)
       }
     }
 
@@ -102,10 +102,19 @@ app.get('/api/search', async (req, res) => {
     if (!requestedTrackers || requestedTrackers.includes('onlinefix')) {
       try {
         const onlineFixResults = await onlineFixClient.search(q)
+        // Pre-scrape details for all Online-Fix results
+        await Promise.all(onlineFixResults.map(async (r) => {
+          try {
+            const details = await onlineFixClient.getDetails(r.url)
+            Object.assign(r, details)
+          } catch (e) {
+            // ignore individual scrape failures
+          }
+        }))
         results.push(...onlineFixResults)
-        console.log(`✅ Online-Fix: ${onlineFixResults.length} results`)
+        console.log(`Online-Fix: ${onlineFixResults.length} results`)
       } catch (err) {
-        console.log('⚠️ Online-Fix search failed:', err.message)
+        console.log('Online-Fix search failed:', err.message)
       }
     }
 
@@ -113,15 +122,22 @@ app.get('/api/search', async (req, res) => {
     if (!requestedTrackers || requestedTrackers.includes('freetp')) {
       try {
         const freetpResults = await freetpClient.search(q)
+        // Pre-scrape details for all FreeTP results
+        await Promise.all(freetpResults.map(async (r) => {
+          try {
+            const pageDetails = await freetpClient.getDetails(r.url)
+            Object.assign(r, pageDetails)
+            const fileIds = await freetpClient.getFileIds(r.url)
+            Object.assign(r, fileIds)
+          } catch (e) {
+            // ignore individual scrape failures
+          }
+        }))
         results.push(...freetpResults)
         console.log(`Freetp: ${freetpResults.length} results`)
       } catch (err) {
         console.log('Freetp search failed:', err.message)
       }
-    }
-
-    if (results.length === 0) {
-      return res.status(404).json({ error: 'No results found' })
     }
 
     res.json(results)
@@ -139,19 +155,8 @@ app.get('/api/magnet/:id', async (req, res) => {
 
   try {
     let magnet
-
-    if (id.startsWith('of-')) {
-      // Online-Fix result
-      const gameId = id.replace('of-', '')
-      magnet = await onlineFixClient.getMagnetLink(gameId)
-    } else if (id.startsWith('ft-')) {
-      // Freetp uses direct download, no magnet
-      return res.status(400).json({ error: 'Magnet links not available for Freetp' })
-    } else {
-      // RuTracker result
-      const rtId = id.replace('rt-', '')
-      magnet = await ruTrackerClient.getMagnetLink(rtId)
-    }
+    const rtId = id.replace('rt-', '')
+    magnet = await ruTrackerClient.getMagnetLink(rtId)
 
     res.json({ magnet })
   } catch (e) {
@@ -257,8 +262,8 @@ app.get('/api/details/:id', async (req, res) => {
 
     if (id.startsWith('of-')) {
       if (!url) {
-        return res.status(400).json({ 
-          error: 'Missing url parameter. Online-Fix details require the full page URL.' 
+        return res.status(400).json({
+          error: 'Missing url parameter. Online-Fix details require the full page URL.'
         })
       }
       details = await onlineFixClient.getDetails(url)
@@ -277,6 +282,9 @@ app.get('/api/details/:id', async (req, res) => {
         torrentAvailable: fileIds.torrentAvailable,
         fixAvailable: fileIds.fixAvailable
       }
+    } else if (id.startsWith('rt-')) {
+      const rtId = id.replace('rt-', '')
+      details = await ruTrackerClient.getDetails(rtId)
     }
 
     res.json(details)
@@ -328,6 +336,51 @@ app.post('/api/logout/:service', async (req, res) => {
   }
 })
 
+/* =========================
+   LATEST UPDATES
+========================= */
+
+app.get('/api/latest/:tracker', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 0
+    let result
+    if (req.params.tracker === 'onlinefix') {
+      result = await onlineFixClient.getLatest(page)
+    } else if (req.params.tracker === 'freetp') {
+      result = await freetpClient.getLatest(page)
+    } else {
+      return res.status(400).json({ error: 'Unknown tracker' })
+    }
+    res.json(result)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+/* =========================
+   IMAGE PROXY
+========================= */
+
+app.get('/api/proxy-image', async (req, res) => {
+  try {
+    const { url } = req.query
+    if (!url) return res.status(400).end()
+    const response = await axios.get(url, {
+      responseType: 'stream',
+      headers: {
+        'Referer': 'https://online-fix.me/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    })
+    if (response.headers['content-type']) {
+      res.set('Content-Type', response.headers['content-type'])
+    }
+    response.data.pipe(res)
+  } catch (e) {
+    res.status(500).end()
+  }
+})
+
 app.listen(3001, "0.0.0.0", () => {
-  console.log('🚀 Server running on http://localhost:3001')
+  console.log('Server running on http://localhost:3001')
 })

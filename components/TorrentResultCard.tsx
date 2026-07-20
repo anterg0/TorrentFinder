@@ -10,14 +10,17 @@ interface TorrentResultCardProps {
     magnetLink?: string
     url?: string
     gameName?: string
+    torrentAvailable?: boolean
+    fixAvailable?: boolean
   }
   isPlaceholder?: boolean
+  onlineFixAuth?: boolean
   onMagnetClick?: (id: string) => void
   onDownloadClick?: (id: string, type?: 'torrent' | 'repair') => void
   onOpenDetails?: (result: TorrentResultCardProps['result']) => void
 }
 
-export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick, onDownloadClick, onOpenDetails }: TorrentResultCardProps) {
+export function TorrentResultCard({ result, isPlaceholder = false, onlineFixAuth = false, onMagnetClick, onDownloadClick, onOpenDetails }: TorrentResultCardProps) {
   const isOnlineFix = result.tracker === 'Online-Fix' 
   const isFreeTP = result.tracker == 'FreeTP'
   const isRutracker = result.tracker == "RuTracker"
@@ -125,33 +128,48 @@ export function TorrentResultCard({ result, isPlaceholder = false, onMagnetClick
 
         {/* Action Buttons */}
         <div className="flex shrink-0">
-          {/* Magnet / Page button */}
+          {/* Open Webpage button - for all trackers */}
           <Button
             size="sm"
             className="rounded-r-none border-r border-primary-foreground/20 px-3"
-            disabled={isPlaceholder || (isOnlineFix || isFreeTP ? !result.url : !onMagnetClick)}
-            onClick={handleMagnetClick}
+            disabled={isPlaceholder || !result.url}
+            onClick={(event) => {
+              event.stopPropagation()
+              if (!isPlaceholder && result.url) window.open(result.url, '_blank')
+            }}
+            title="Open webpage"
           >
-            {isOnlineFix || isFreeTP ? <ExternalLink className="w-4 h-4" /> : <Magnet className="w-4 h-4" />}
+            <ExternalLink className="w-4 h-4" />
           </Button>
 
-          {(isOnlineFix || isFreeTP) && (
+          {(isOnlineFix || isFreeTP) ? (
             <Button
               size="sm"
               className="rounded-none border-x border-primary-foreground/20 px-3"
-              disabled={isPlaceholder || !result.gameName}
+              disabled={isPlaceholder || (isFreeTP ? !result.fixAvailable : !result.gameName || (isOnlineFix && !onlineFixAuth))}
               onClick={(event) => handleDownloadClick(event, 'repair')}
               title="Download Fix Repair (.rar)"
             >
               <Wrench className="w-4 h-4" />
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              className="rounded-none border-x border-primary-foreground/20 px-3"
+              disabled={isPlaceholder || !onMagnetClick}
+              onClick={handleMagnetClick}
+              title="Magnet link"
+            >
+              <Magnet className="w-4 h-4" />
             </Button>
           )}
 
           <Button
             size="sm"
             className="rounded-l-none px-3"
-            disabled={isPlaceholder || (isOnlineFix || isFreeTP ? !result.gameName : !onDownloadClick)}
+            disabled={isPlaceholder || (isOnlineFix || isFreeTP ? isFreeTP ? !result.torrentAvailable : !result.gameName || (isOnlineFix && !onlineFixAuth) : !onDownloadClick)}
             onClick={(event) => handleDownloadClick(event, 'torrent')}
+            title={isOnlineFix || isFreeTP ? 'Download .torrent' : 'Download .torrent'}
           >
             <Download className="w-4 h-4" />
           </Button>

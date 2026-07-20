@@ -41,30 +41,12 @@ export default class Freetp {
       }
     }
 
-    console.log(`[Decoding] Using charset: ${charset}`)
-
     try {
       const decoder = new TextDecoder(charset, { fatal: false })
       return decoder.decode(data)
     } catch (err) {
       console.warn(`Failed to decode with ${charset}, falling back to utf-8`)
       return new TextDecoder('utf-8', { fatal: false }).decode(data)
-    }
-  }
-
-  debugLogEncoding(label, data, contentType = '') {
-    console.log(`\n=== DEBUG: ${label} ===`)
-    if (Buffer.isBuffer(data)) {
-      console.log(`Buffer size: ${data.length} bytes`)
-      console.log(`First 100 bytes (hex): ${data.slice(0, 100).toString('hex')}`)
-
-      const decoded = this.decodeResponse(data, contentType)
-      console.log(`Decoded string (first 300 chars): ${decoded.substring(0, 300)}`)
-      return decoded
-    } else if (typeof data === 'string') {
-      console.log(`String length: ${data.length} characters`)
-      console.log(`First 300 chars: ${data.substring(0, 300)}`)
-      return data
     }
   }
 
@@ -114,7 +96,7 @@ export default class Freetp {
     if (fs.existsSync(this.cookieFile)) {
       fs.unlinkSync(this.cookieFile)
     }
-    console.log('🗑️ Freetp cookies cleared')
+    console.log('Freetp cookies cleared')
   }
 
   async isLoggedIn() {
@@ -213,8 +195,6 @@ export default class Freetp {
       })
 
       const contentType = res.headers['content-type'] || ''
-      this.debugLogEncoding('Raw Search Response', res.data, contentType)
-
       const html = this.decodeResponse(res.data, contentType)
 
       const $ = cheerio.load(html, { decodeEntities: false })
@@ -309,8 +289,6 @@ export default class Freetp {
         'Referer': this.baseURL
       }
     })
-
-    await new Promise(resolve => setTimeout(resolve, 3000))
 
     const dlUrl = `https://freetp.org/engine/download.php?id=${fileId}&area=`
     const dlRes = await this.client.get(dlUrl, {
@@ -460,5 +438,59 @@ export default class Freetp {
     if (details.author) details.author = stripDot(details.author)
 
     return details
+  }
+
+  async getLatest(page = 0) {
+    try {
+      const url = page <= 1 ? '' : `page/${page}/`
+      const res = await this.client.get(url)
+      const html = this.decodeResponse(res.data, res.headers['content-type'] || '')
+      const $ = cheerio.load(html, { decodeEntities: false })
+      const items = []
+
+      $('div.base').each((_, base) => {
+        const $base = $(base)
+
+        const titleLink = $base.find('.header-h1 a')
+        const itemUrl = titleLink.attr('href') || ''
+        const title = $base.find('.header-h1 h1').text().replace(/&nbsp;/g, ' ').trim()
+        const idMatch = itemUrl.match(/(\d+)-/)
+        const id = idMatch ? `ft-latest-${idMatch[1]}` : `ft-latest-${items.length}`
+
+        const firstImg = $base.find('.maincont img').first()
+        let image = firstImg.attr('src') || ''
+        if (image && !image.startsWith('http')) {
+          image = `https://freetp.org${image}`
+        }
+
+        const dateText = $base.find('div[style*="position: relative"] span').text().trim()
+
+        const mlink = $base.find('.mlink')
+        const mlinkText = mlink.text()
+        const authorMatch = mlinkText.match(/Автор:\s*([^\s|]+)/)
+        const author = authorMatch ? authorMatch[1] : ''
+        const categoryMatch = mlinkText.match(/Категория:\s*([^\s|]+)/)
+        const category = categoryMatch ? categoryMatch[1] : ''
+
+        items.push({
+          id,
+          title,
+          url: itemUrl.startsWith('http') ? itemUrl : `https://freetp.org${itemUrl}`,
+          image,
+          date: dateText,
+          author,
+          category,
+          tracker: 'FreeTP'
+        })
+      })
+
+      return { items, hasMore: items.length > 0 }
+    } catch (e) {
+      if (e.response && e.response.status === 404) {
+        return { items: [], hasMore: false }
+      }
+      console.error('FreeTP latest fetch error:', e.message)
+      return { items: [], hasMore: false }
+    }
   }
 }

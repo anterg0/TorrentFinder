@@ -5,8 +5,10 @@ import { motion, AnimatePresence } from 'motion/react'
 import { TorrentResultCard } from './TorrentResultCard'
 import { SettingsSidebar } from './SettingsSidebar'
 import { FilterPanel } from './FilterPanel'
+import { LatestUpdates } from './LatestUpdates'
 import { TorrentResult, enrichResultWithTags } from '../utils/torrentUtils'
-import { Search, User, Lock, X, Shield, Menu, ExternalLink, Download, Wrench, ArrowUp, ArrowDown } from 'lucide-react'
+import { Search, User, Lock, X, Shield, Menu, ExternalLink, Download, Wrench, ArrowUp, ArrowDown, ChevronDown } from 'lucide-react'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from './ui/collapsible'
 import axios from 'axios'
 import { toast } from 'sonner'
 // Collapsible components removed (not used) - kept UI simple
@@ -58,36 +60,28 @@ export function sortResults(results: TorrentResult[], sortBy: SortOption, direct
 // Updated search function with auth awareness
 export async function searchTorrents(query: string, trackers: string[] = ['rutracker', 'onlinefix', 'freetp']): Promise<TorrentResult[]> {
   try {
-    console.log(`Searching for: "${query}" with trackers: ${trackers.join(',')}`)
-
-    const healthResponse = await axios.get('http://localhost:3001/api/health', {
-      timeout: 5000
-    })
-    console.log('Server health check:', healthResponse.data)
-
     const response = await axios.get(`http://localhost:3001/api/search`, {
       params: { q: query, trackers: trackers.join(',') },
       timeout: 45000
     })
 
-    console.log('Search response:', response.data)
     return response.data
   } catch (error) {
     console.error('Search API error:', error)
     if (axios.isAxiosError(error)) {
       if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
-        throw new Error('❌ Backend server is not running.\n\nPlease run: npm run dev:backend\n\nOr start both servers with: npm run dev')
+        throw new Error('Backend server is not running.\n\nPlease run: npm run dev:backend\n\nOr start both servers with: npm run dev')
       } else if (error.code === 'ECONNABORTED') {
-        throw new Error('⏱️ Search timed out. RuTracker might be slow or blocking requests. Try again in a few minutes.')
+        throw new Error('Search timed out. RuTracker might be slow or blocking requests. Try again in a few minutes.')
       } else if (error.response?.status === 401) {
-        throw new Error('🔐 RuTracker authentication required')
+        throw new Error('RuTracker authentication required')
       } else if (error.response?.status === 400) {
-        throw new Error('❌ Invalid search query. Please try different search terms.')
+        throw new Error('Invalid search query. Please try different search terms.')
       } else if (error.response?.status === 500) {
-        throw new Error('❌ Server error occurred while searching. Please try again.')
+        throw new Error('Server error occurred while searching. Please try again.')
       }
     }
-    throw new Error('❌ Failed to search torrents. Please check your internet connection and try again.')
+    throw new Error('Failed to search torrents. Please check your internet connection and try again.')
   }
 }
 
@@ -123,11 +117,13 @@ interface TorrentResultDetailsProps {
   onClose: () => void
   onMagnetClick: (id: string) => void
   onDownloadClick: (id: string, type?: 'torrent' | 'repair') => void
+  onlineFixAuth: boolean
 }
 
-function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick }: TorrentResultDetailsProps) {
+function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick, onlineFixAuth }: TorrentResultDetailsProps) {
   const isOnlineFix = result.tracker === 'Online-Fix'
   const isFreeTP = result.tracker == 'FreeTP'
+  const isRuTracker = result.tracker === 'RuTracker'
   const title = result.gameName || result.name
 
   // removed unused collapsible open state
@@ -136,7 +132,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
   const hasFetchedRef = useRef(false)
 
   useEffect(() => {
-    if ((isOnlineFix || isFreeTP) && result.url && !hasFetchedRef.current) {
+    if ((isOnlineFix || isFreeTP || isRuTracker) && result.url && !hasFetchedRef.current) {
       hasFetchedRef.current = true
       setIsLoadingDetails(true)
 
@@ -159,6 +155,49 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
   // Merge the result with fetched details
   const enrichedResult = { ...result, ...details }
 
+  function FieldCard({ label, value }: { label: string; value: string }) {
+    const [isHovered, setIsHovered] = useState(false)
+    const cardRef = useRef<HTMLDivElement>(null)
+    const [pos, setPos] = useState({ top: 0, left: 0 })
+    const str = String(value)
+    const truncated = str.length > 50 ? str.slice(0, 50) + '...' : str
+
+    useEffect(() => {
+      if (isHovered && cardRef.current) {
+        const r = cardRef.current.getBoundingClientRect()
+        const pw = 320
+        setPos({
+          top: r.bottom + 4,
+          left: Math.max(8, Math.min(r.left, window.innerWidth - pw - 8))
+        })
+      }
+    }, [isHovered])
+
+    return (
+      <div
+        ref={cardRef}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        className="rounded-3xl border border-border/60 bg-accent/40 p-4 min-w-[140px] flex-1 basis-[160px] relative"
+      >
+        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
+        <p className="mt-2 text-sm font-semibold text-foreground break-words">{truncated}</p>
+        {str.length > 30 && isHovered && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.15 }}
+            className="fixed z-50 rounded-xl border border-border/60 bg-card shadow-xl p-4 max-w-[320px] pointer-events-none"
+            style={{ top: pos.top, left: pos.left }}
+          >
+            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1">{label}</p>
+            <p className="text-sm font-semibold text-foreground break-words">{str}</p>
+          </motion.div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <motion.div
       key="details-overlay"
@@ -175,7 +214,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="relative z-10 mx-4 my-8 flex w-full max-w-4xl flex-col overflow-hidden rounded-[28px] border border-border/70 bg-card shadow-2xl max-h-[92vh]"
+        className={`relative z-10 mx-4 my-8 flex w-full ${isRuTracker ? 'max-w-6xl w-[92vw]' : 'max-w-4xl'} flex-col overflow-hidden rounded-[28px] border border-border/70 bg-card shadow-2xl max-h-[92vh]`}
       >
         {/* Header */}
         <div className="flex flex-col gap-4 border-b border-border/60 bg-background/95 p-6 backdrop-blur-sm sm:flex-row sm:items-start sm:justify-between flex-shrink-0">
@@ -201,7 +240,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
             <section className="space-y-5">
 
               {/* Update Info - Appears FIRST */}
-              {enrichedResult.updateInfo && (
+              {enrichedResult.updateInfo && !isRuTracker && (
                 <motion.div
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -230,7 +269,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
               )}
 
               {/* Loading State */}
-              {(isOnlineFix || isFreeTP) && isLoadingDetails && (
+              {(isOnlineFix || isFreeTP || isRuTracker) && isLoadingDetails && (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mb-4" />
                   <p className="text-muted-foreground">Loading game details...</p>
@@ -239,7 +278,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
               )}
 
               {/* Main Content */}
-              {((!isOnlineFix && !isFreeTP) || !isLoadingDetails) && (
+              {!isLoadingDetails && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -478,25 +517,51 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
                       )}
                     </div>
                   ) : (
-                    // RuTracker content
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="rounded-3xl border border-border/60 bg-accent/40 p-5">
-                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Release date</p>
-                        <p className="mt-2 text-lg font-semibold text-foreground">{result.uploadDate || 'Unknown'}</p>
-                      </div>
-                      <div className="rounded-3xl border border-border/60 bg-accent/40 p-5">
-                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">File size</p>
-                        <p className="mt-2 text-lg font-semibold text-foreground">{result.size}</p>
-                      </div>
-                    </div>
-                  )}
+                    // RuTracker Content
+                    <div className="space-y-4">
 
-                  {!isOnlineFix && !isFreeTP && (
-                    <div className="space-y-3 rounded-3xl border border-border/60 bg-background/80 p-5">
-                      <h3 className="text-lg font-semibold text-foreground">Description</h3>
-                      <p className="text-sm leading-7 text-muted-foreground">
-                        The torrent contains the selected release, including package contents and metadata. Use the buttons below to fetch the torrent file or open the magnet link in your preferred client.
-                      </p>
+                      {/* Dynamic Field Cards */}
+                      {enrichedResult.fields && Object.keys(enrichedResult.fields).length > 0 && (
+                        <div className="flex flex-wrap gap-3">
+                          {Object.entries(enrichedResult.fields).filter(([label]) =>
+                            !/обновлен/i.test(label)
+                          ).map(([label, value]) => (
+                            <FieldCard key={label} label={label} value={String(value)} />
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Spoiler Sections */}
+                      {enrichedResult.spoilers && enrichedResult.spoilers.length > 0 && (
+                        <div className="space-y-3">
+                          {enrichedResult.spoilers.map((spoiler: { title: string; content: string }, i: number) => (
+                            <Collapsible key={i} className="rounded-3xl border border-border/60 bg-background/80 overflow-hidden">
+                              <CollapsibleTrigger className="flex w-full items-center justify-between p-5 text-left hover:bg-accent/40 transition-colors cursor-pointer">
+                                <span className="font-semibold text-foreground">{spoiler.title}</span>
+                                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform ui-open:rotate-180" />
+                              </CollapsibleTrigger>
+                              <CollapsibleContent className="border-t border-border/60">
+                                <div className="p-5 text-sm leading-7 text-muted-foreground whitespace-pre-wrap"
+                                     dangerouslySetInnerHTML={{ __html: spoiler.content }} />
+                              </CollapsibleContent>
+                            </Collapsible>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Original Post HTML */}
+                      {enrichedResult.postHtml && (
+                        <Collapsible className="rounded-3xl border border-border/60 bg-background/80 overflow-hidden">
+                          <CollapsibleTrigger className="flex w-full items-center justify-between p-5 text-left hover:bg-accent/40 transition-colors cursor-pointer">
+                            <span className="font-semibold text-foreground">Original Post</span>
+                            <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform ui-open:rotate-180" />
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="border-t border-border/60">
+                            <div className="p-5 text-sm leading-7 text-muted-foreground"
+                                 dangerouslySetInnerHTML={{ __html: enrichedResult.postHtml }} />
+                          </CollapsibleContent>
+                        </Collapsible>
+                      )}
                     </div>
                   )}
                 </motion.div>
@@ -521,7 +586,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
                       window.location.href = `http://localhost:3001/api/download/${enrichedResult.id}?${params.toString()}`
                     }
                   }}
-                  disabled={isFreeTP ? !enrichedResult.fixAvailable : !enrichedResult.gameName || !enrichedResult.url}
+                  disabled={isFreeTP ? !enrichedResult.fixAvailable : !enrichedResult.gameName || !enrichedResult.url || (isOnlineFix && !onlineFixAuth)}
                   className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2"
                 >
                   <Wrench className="h-4 w-4" />
@@ -539,7 +604,7 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
                       window.location.href = `http://localhost:3001/api/download/${enrichedResult.id}?${params.toString()}`
                     }
                   }}
-                  disabled={isFreeTP ? !enrichedResult.torrentAvailable : !enrichedResult.gameName || !enrichedResult.url}
+                  disabled={isFreeTP ? !enrichedResult.torrentAvailable : !enrichedResult.gameName || !enrichedResult.url || (isOnlineFix && !onlineFixAuth)}
                   className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2"
                 >
                   <Download className="h-4 w-4" />
@@ -562,17 +627,27 @@ function TorrentResultDetails({ result, onClose, onMagnetClick, onDownloadClick 
               <div className="col-span-3 flex flex-col sm:flex-row justify-center gap-3 items-center">
                 <Button
                   onClick={() => onDownloadClick(enrichedResult.id, 'torrent')}
-                  className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2 w-full sm:w-[280px]"
+                  className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2 w-full sm:w-[200px]"
                 >
                   <Download className="h-4 w-4" />
                   Download .torrent
                 </Button>
                 <Button
                   onClick={() => onMagnetClick(enrichedResult.id)}
-                  className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2 w-full sm:w-[280px]"
+                  className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2 w-full sm:w-[200px]"
                 >
                   <ExternalLink className="h-4 w-4" />
                   Magnet Link
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (enrichedResult.url) window.open(enrichedResult.url, '_blank')
+                  }}
+                  disabled={!enrichedResult.url}
+                  className="h-11 bg-white text-black hover:bg-gray-100 border-gray-300 flex items-center justify-center gap-2 w-full sm:w-[200px]"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Open Webpage
                 </Button>
               </div>
             )}
@@ -591,6 +666,7 @@ export function TorrentSearch() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedTrackers, setSelectedTrackers] = useState<string[]>([])
+  const [selectedAuthors, setSelectedAuthors] = useState<string[]>([])
   const [isFocused, setIsFocused] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -623,6 +699,29 @@ export function TorrentSearch() {
   const [onlineFixAuth, setOnlineFixAuth] = useState(false)
   const [freeTpAuth, setFreeTpAuth] = useState(false)
   const [trackersToSearch, setTrackersToSearch] = useState<string[]>(['rutracker', 'onlinefix', 'freetp'])
+  const [latestTab, setLatestTab] = useState<'onlinefix' | 'freetp'>('onlinefix')
+
+  // Clear auth modal fields when opening
+  useEffect(() => {
+    if (showAuthModal) {
+      setAuthUsername('')
+      setAuthPassword('')
+      setCaptchaCode('')
+      setAuthError('')
+      setCaptchaError('')
+      setShowCaptcha(false)
+      setCaptchaImageLoaded(false)
+      setCaptchaImageSrc('/api/captcha')
+    }
+  }, [showAuthModal])
+
+  useEffect(() => {
+    if (showOnlineFixAuthModal) {
+      setOnlineFixUsername('')
+      setOnlineFixPassword('')
+      setOnlineFixAuthError('')
+    }
+  }, [showOnlineFixAuthModal])
 
   // Check auth status on mount
   useEffect(() => {
@@ -725,6 +824,18 @@ export function TorrentSearch() {
     return Object.entries(trackerCounts).map(([name, count]) => ({ name, count })).sort()
   }, [results])
 
+  const availableAuthors = useMemo(() => {
+    const authorCounts = results.reduce((acc, result) => {
+      if (result.tracker === 'Online-Fix' || result.tracker === 'FreeTP') return acc
+      const author = result.author?.trim()
+      if (author) {
+        acc[author] = (acc[author] || 0) + 1
+      }
+      return acc
+    }, {} as Record<string, number>)
+    return Object.entries(authorCounts).map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name))
+  }, [results])
+
   const filteredResults = useMemo(() => {
     let filtered = results
 
@@ -738,8 +849,13 @@ export function TorrentSearch() {
       filtered = filtered.filter((result) => result.tags?.some((tag) => selectedTags.includes(tag)))
     }
 
+    // Filter by authors
+    if (selectedAuthors.length > 0) {
+      filtered = filtered.filter((result) => result.author && selectedAuthors.includes(result.author))
+    }
+
     return filtered
-  }, [results, selectedTrackers, selectedTags])
+  }, [results, selectedTrackers, selectedTags, selectedAuthors])
 
   const showResults = hasSearched || isLoading || error
   const sortedResults = sortResults(filteredResults, sortBy, sortDirection)
@@ -756,9 +872,16 @@ export function TorrentSearch() {
     )
   }
 
+  const toggleAuthorFilter = (author: string) => {
+    setSelectedAuthors((current) =>
+      current.includes(author) ? current.filter((item) => item !== author) : [...current, author]
+    )
+  }
+
   const clearAllFilters = () => {
     setSelectedTags([])
     setSelectedTrackers([])
+    setSelectedAuthors([])
   }
 
   const handleSearch = async () => {
@@ -774,10 +897,6 @@ export function TorrentSearch() {
       const enrichedResults = searchResults.map(result => enrichResultWithTags(result))
       setResults(enrichedResults)
 
-      if (enrichedResults.length === 0) {
-        setError('No results found. Try a different search term.')
-      }
-
       // Remind user about login on each search
       if (!ruTrackerAuth && trackersToSearch.includes('rutracker')) {
         toast.info('Log in to RuTracker to search through it', { id: 'rutracker-reminder', duration: 3000 })
@@ -792,7 +911,7 @@ export function TorrentSearch() {
       setError(errorMessage)
 
       // Show auth modal for 401 errors
-      if (errorMessage.includes('authentication required') || errorMessage.includes('🔐')) {
+      if (errorMessage.includes('authentication required')) {
         setShowAuthModal(true)
       }
     } finally {
@@ -1039,14 +1158,6 @@ export function TorrentSearch() {
                     'Login'
                   )}
                 </Button>
-
-                <p className="text-xs text-center">
-                  {!showCaptcha
-                    ? "Login will show CAPTCHA if needed"
-                    : captchaImageLoaded
-                      ? "Click CAPTCHA to refresh"
-                      : "Loading CAPTCHA image..."}
-                </p>
               </form>
             </motion.div>
           </motion.div>
@@ -1287,6 +1398,15 @@ export function TorrentSearch() {
         </motion.div>
       </motion.div>
 
+      {/* Latest Updates - visible when not searching */}
+      {!showResults && (
+        <LatestUpdates
+          activeTab={latestTab}
+          onTabChange={setLatestTab}
+          onOpenDetails={handleOpenDetails}
+        />
+      )}
+
       {/* Results Container */}
       <AnimatePresence>
         {showResults && (
@@ -1313,8 +1433,11 @@ export function TorrentSearch() {
                       count: results.filter(r => r.tags?.includes(tag)).length
                     }))}
                     selectedTrackers={selectedTrackers}
+                    authors={availableAuthors}
+                    selectedAuthors={selectedAuthors}
                     selectedTags={selectedTags}
                     onTrackerToggle={toggleTrackerFilter}
+                    onAuthorToggle={toggleAuthorFilter}
                     onTagToggle={toggleTagFilter}
                     onClearAll={clearAllFilters}
                   />
@@ -1389,17 +1512,17 @@ export function TorrentSearch() {
                         exit={{ opacity: 0 }}
                         className="space-y-4"
                       >
-                        {sortedResults.map((result, index) => (
+                        {sortedResults.map((result) => (
                           <motion.div
                             key={result.id}
-                            layout
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.03 }}
+                            transition={{ duration: 0.15 }}
                           >
                             <TorrentResultCard
                               result={result}
                               isPlaceholder={false}
+                              onlineFixAuth={onlineFixAuth}
                               onMagnetClick={handleMagnetClick}
                               onDownloadClick={handleDownloadClick}
                               onOpenDetails={handleOpenDetails}
@@ -1409,16 +1532,27 @@ export function TorrentSearch() {
                       </motion.div>
                     ) : searchQuery && !isLoading && !error ? (
                       <motion.div
-                        key="no-results"
+                        key={results.length > 0 ? 'filtered-out' : 'no-results'}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         className="text-center py-12"
                       >
-                        <p className="text-muted-foreground">No results found for "{searchQuery}"</p>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          Try different keywords or check your spelling
-                        </p>
+                        {results.length > 0 ? (
+                          <>
+                            <p className="text-muted-foreground">No results match the current filters</p>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Try adjusting your filter selection
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-muted-foreground">No results found for "{searchQuery}"</p>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Try different keywords or check your spelling
+                            </p>
+                          </>
+                        )}
                       </motion.div>
                     ) : null}
                   </AnimatePresence>
@@ -1438,6 +1572,7 @@ export function TorrentSearch() {
             onClose={handleCloseDetails}
             onMagnetClick={handleMagnetClick}
             onDownloadClick={handleDownloadClick}
+            onlineFixAuth={onlineFixAuth}
           />
         )}
       </AnimatePresence>

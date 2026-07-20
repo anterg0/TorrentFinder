@@ -28,13 +28,6 @@ export default class OnlineFix {
     this.loadCookies()
   }
 
-  /* =========================
-     DECODING (FIXED)
-  ========================= */
-
-  /**
-   * Decode response using the charset from Content-Type header
-   */
   decodeResponse(data, contentType = '') {
     if (!Buffer.isBuffer(data)) {
       return typeof data === 'string' ? data : String(data)
@@ -49,30 +42,12 @@ export default class OnlineFix {
       }
     }
 
-    console.log(`[Decoding] Using charset: ${charset}`)
-
     try {
       const decoder = new TextDecoder(charset, { fatal: false })
       return decoder.decode(data)
     } catch (err) {
       console.warn(`Failed to decode with ${charset}, falling back to utf-8`)
       return new TextDecoder('utf-8', { fatal: false }).decode(data)
-    }
-  }
-
-  debugLogEncoding(label, data, contentType = '') {
-    console.log(`\n=== DEBUG: ${label} ===`)
-    if (Buffer.isBuffer(data)) {
-      console.log(`Buffer size: ${data.length} bytes`)
-      console.log(`First 100 bytes (hex): ${data.slice(0, 100).toString('hex')}`)
-
-      const decoded = this.decodeResponse(data, contentType)
-      console.log(`Decoded string (first 300 chars): ${decoded.substring(0, 300)}`)
-      return decoded
-    } else if (typeof data === 'string') {
-      console.log(`String length: ${data.length} characters`)
-      console.log(`First 300 chars: ${data.substring(0, 300)}`)
-      return data
     }
   }
 
@@ -171,7 +146,7 @@ export default class OnlineFix {
     if (fs.existsSync(this.cookieFile)) {
       fs.unlinkSync(this.cookieFile)
     }
-    console.log('🗑️ Online-Fix cookies cleared')
+    console.log('Online-Fix cookies cleared')
   }
 
   async isLoggedIn() {
@@ -276,8 +251,6 @@ export default class OnlineFix {
 
       // === CRITICAL FIX ===
       const contentType = res.headers['content-type'] || ''
-      this.debugLogEncoding('Raw Search Response', res.data, contentType)
-
       const html = this.decodeResponse(res.data, contentType)
 
       const $ = cheerio.load(html, { decodeEntities: false })
@@ -311,7 +284,7 @@ export default class OnlineFix {
         })
       })
 
-      console.log(`✅ Online-Fix: ${results.length} results`)
+      console.log(`Online-Fix: ${results.length} results`)
       return results
     } catch (err) {
       console.error('Search error:', err.message)
@@ -320,25 +293,8 @@ export default class OnlineFix {
   }
 
   /* =========================
-     MAGNET / DOWNLOAD
+     DOWNLOAD
   ========================= */
-
-  async getMagnetLink(topicId) {
-    try {
-      const res = await this.client.get(`?do=search&story=${encodeURIComponent(topicId)}`)
-      const html = this.decodeResponse(res.data, res.headers['content-type'])
-
-      const magnetMatch = html.match(/magnet:\?xt=urn:btih:[^"'\s]+/)
-      if (magnetMatch) return magnetMatch[0]
-
-      const $ = cheerio.load(html, { decodeEntities: false })
-      const magnet = $('a[href^="magnet:"]').attr('href')
-      return magnet || `https://online-fix.me/?do=search&story=${encodeURIComponent(topicId)}`
-    } catch (err) {
-      console.error('Error getting magnet link:', err.message)
-      return `https://online-fix.me/?do=search&story=${encodeURIComponent(topicId)}`
-    }
-  }
 
   async downloadTorrent(gameFolder, gamePageUrl = null) {
     try {
@@ -385,7 +341,7 @@ export default class OnlineFix {
         headers: { 'Referer': dirUrl }
       })
 
-      console.log(`✅ Online-Fix: Downloaded ${torrentFilename} for ${gameFolder}`)
+      console.log(`Online-Fix: Downloaded ${torrentFilename} for ${gameFolder}`)
       return {
         response: torrentRes,
         filename: torrentFilename
@@ -437,7 +393,7 @@ export default class OnlineFix {
         headers: { 'Referer': repairDirUrl }
       })
 
-      console.log(`✅ Online-Fix: Downloaded repair ${rarFile} for ${gameFolder}`)
+      console.log(`Online-Fix: Downloaded repair ${rarFile} for ${gameFolder}`)
       return {
         response: rarRes,
         filename: rarFile
@@ -455,7 +411,7 @@ export default class OnlineFix {
 
   async getDetails(url) {
     try {
-      console.log(`🔍 Scraping Online-Fix: ${url}`)
+      console.log(`Scraping Online-Fix: ${url}`)
 
       const res = await this.client.get(url, {
         headers: {
@@ -530,7 +486,7 @@ export default class OnlineFix {
         details.updateInfo = $editedBlock.text().trim()
       }
 
-      console.log(`✅ Scraped successfully | Update: ${!!details.updateInfo}`)
+      console.log(`Scraped successfully | Update: ${!!details.updateInfo}`)
       return details
 
     } catch (err) {
@@ -550,4 +506,76 @@ export default class OnlineFix {
       }
     }
   }
+
+  async getLatest(showMore = 0) {
+    try {
+      let html
+      if (showMore === 0) {
+        const res = await this.client.get('')
+        html = this.decodeResponse(res.data, res.headers['content-type'] || '')
+      } else {
+        const res = await this.client.post('', `show_more=${showMore}`, {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json, text/javascript, */*; q=0.01'
+          }
+        })
+        try {
+          const parsed = JSON.parse(typeof res.data === 'string' ? res.data : this.decodeResponse(res.data, res.headers['content-type'] || ''))
+          html = parsed.posts || parsed.html || parsed.content || ''
+        } catch {
+          html = typeof res.data === 'string' ? res.data : this.decodeResponse(res.data, res.headers['content-type'] || '')
+        }
+      }
+
+      const $ = cheerio.load(html, { decodeEntities: false })
+      const items = []
+
+      $('article.news').each((_, article) => {
+        const $article = $(article)
+
+        const url = $article.find('a.big-link').attr('href') || ''
+        const idMatch = url.match(/(\d+)-/)
+        const id = idMatch ? `of-latest-${idMatch[1]}` : `of-latest-${items.length}`
+
+        const title = $article.find('h2.title').text().trim()
+        const image = $article.find('.img img.lazyload').attr('data-src') || ''
+        const imageUrl = image ? `/api/proxy-image?url=${encodeURIComponent(image)}` : ''
+        const date = $article.find('.info-date time').text().trim()
+        const editInfo = $article.find('.edit').text().trim()
+
+        const previewHtml = $article.find('.preview-text').html() || ''
+        const releaseDate = extractField(previewHtml, ['Дата выхода:', 'Game release:'])
+        const playVia = extractField(previewHtml, ['Игра через:', 'Play via:'])
+
+        items.push({
+          id,
+          title,
+          url,
+          image: imageUrl,
+          date,
+          editInfo: editInfo.replace(/&nbsp;/g, ' ').trim(),
+          releaseDate: releaseDate.replace(/&nbsp;/g, ' ').trim(),
+          playVia: playVia.replace(/&nbsp;/g, ' ').trim(),
+          tracker: 'Online-Fix'
+        })
+      })
+
+      return { items, hasMore: items.length > 0 }
+    } catch (e) {
+      console.error('Online-Fix latest fetch error:', e.message)
+      return { items: [], hasMore: false }
+    }
+  }
+}
+
+function extractField(html, labels) {
+  for (const label of labels) {
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp(escaped + '\\s*([^<\\n]+)')
+    const match = html.match(regex)
+    if (match) return match[1].trim()
+  }
+  return ''
 }
