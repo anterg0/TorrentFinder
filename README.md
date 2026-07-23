@@ -1,219 +1,117 @@
+![logo](public/images/logo.png)
+
 # TorrentFinder
 
-A minimalistic torrent search engine that scrapes RuTracker.org in real-time using DuckDuckGo search with a dark theme and smooth animations.
+A self-hosted torrent search app that searches across multiple trackers from one place. Supports RuTracker, Online-Fix, and FreeTP with built-in authentication, magnet links, torrent downloads, and fix/repair file downloads.  
 
-## 🚀 Getting Started
+### Disclaimer
+
+This started as an experimental project to test Figma's AI to build websites, which turned into a real app afterwards.  
+UI might be janky (especially the search bar animation) since AI agents were used in development of this app.
+
+## Getting Started
 
 ### Prerequisites
 
-- Node.js (version 16 or higher)
-- npm or yarn package manager
+You need [Node.js](https://nodejs.org/) (v18 or newer) installed on your machine. Download it from the official site - the LTS version is recommended.
 
-### Installation & Setup
+Verify it's installed:
 
-1. **Clone or download the project files**
+```bash
+node -v
+```
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+### Setup
 
-3. **Start both frontend and backend**
-   ```bash
-   npm run dev
-   ```
-   This will start:
-   - Frontend (React app) on http://localhost:3000
-   - Backend (Express server) on http://localhost:3001
+You can either run **start.bat** to install dependencies and launch the app or do it manually.
 
-4. **Alternative: Start servers separately**
-   
-   Frontend only:
-   ```bash
-   npm run dev:frontend
-   ```
-   
-   Backend only:
-   ```bash
-   npm run dev:backend
-   ```
+Clone the repo and install dependencies:
 
-5. **Open your browser**
-   Navigate to `http://localhost:3000` to use the application
+```bash
+git clone https://github.com/anterg0/TorrentFinder.git
+cd TorrentFinder
+npm install
+```
 
-### 🔧 Troubleshooting
+Run the app with this command:
 
-#### "Network Error" or "Backend server is not running"
+```bash
+npm start
+```
 
-1. **Check if backend is running:**
-   ```bash
-   npm run test:backend
-   ```
+This runs:
+- **Frontend** (Vite + React) at http://localhost:3000
+- **Backend** (Express) at http://localhost:3001
 
-2. **Start backend manually:**
-   ```bash
-   npm run dev:backend
-   ```
 
-3. **Check server logs** - Look for errors in the terminal
+## Features
 
-4. **Verify ports are free:**
-   - Frontend: http://localhost:3000
-   - Backend: http://localhost:3001
+- **Multi-tracker search** - Search RuTracker, Online-Fix, and FreeTP simultaneously from a single search bar
+- **Built-in authentication** - Log into each tracker directly from the app (RuTracker supports CAPTCHA)
+- **Download options** - Download .torrent files, magnet links, fix repairs, or open the source page
+- **Detailed result pages** - Rich game info pages with videos, descriptions, launch guides, and player counts (Online-Fix / FreeTP)
+- **Filtering and sorting** - Filter by tracker, tags, and author. Sort by name, size, date, or seeders
+- **Latest updates** - Browse recent uploads from Online-Fix and FreeTP
+- **Dark theme** - Clean dark UI with smooth animations
+- **Settings sidebar** - Manage your tracker logins in one place
 
-#### "Hello, World!" instead of search interface
+## Supported Trackers
 
-1. **Clear browser cache** (Ctrl+Shift+R or Cmd+Shift+R)
-2. **Stop and restart servers:**
-   ```bash
-   # Stop with Ctrl+C, then:
-   npm run dev
-   ```
+| Tracker | Auth Required | Notes |
+|---------|--------------|-------|
+| RuTracker | Yes (with CAPTCHA) | Full torrent + magnet support |
+| Online-Fix | Yes | Torrent and fix repair downloads |
+| FreeTP | No | Torrent and fix repair downloads |
 
-#### Search takes too long or times out
+## Usage Tips
 
-- This is normal for web scraping (can take 30-45 seconds)
-- RuTracker may be rate-limiting requests
-- Try different search terms or wait a few minutes
+- Log into at least one tracker before searching. Use the settings gear icon in the top-right corner.
+- RuTracker searches will remind you to log in if you haven't yet.
+- Online-Fix and FreeTP results include extra details like release date, player counts, and launch guides.
+- Fix repair files are separate downloads from the main .torrent file.
 
-## 🛠️ Available Scripts
-
-- `npm run dev` - Start both frontend and backend concurrently
-- `npm run dev:frontend` - Start only the React frontend (port 3000)
-- `npm run dev:backend` - Start only the Express backend (port 3001) 
-- `npm run server` - Alternative command to start backend
-- `npm run build` - Build frontend for production
-- `npm run preview` - Preview production build locally
-- `npm run lint` - Run ESLint
-
-## 🧩 Project Structure
+## Project Structure
 
 ```
 ├── server/
-│   └── server.js           # Express backend with web scraping
-├── src/
-│   └── main.tsx           # React entry point
-├── components/            # React components
-│   ├── TorrentSearch.tsx  # Main search component with real API calls
-│   ├── TorrentResultCard.tsx # Result card with magnet/download links
-│   └── ui/               # UI components (buttons, inputs, etc.)
-├── data/
-│   └── mockTorrents.ts   # Data types and placeholder content
-├── styles/
-│   └── globals.css       # Global styles with Tailwind
-└── App.tsx               # Main app component
+│   ├── server.js           # Express API server
+│   ├── rutracker.js        # RuTracker scraper + auth
+│   ├── onlinefix.js        # Online-Fix scraper + auth
+│   └── freetp.js           # FreeTP scraper + auth
+├── components/
+│   ├── TorrentSearch.tsx   # Main search UI + results
+│   ├── TorrentResultCard.tsx # Individual result card
+│   ├── FilterPanel.tsx     # Filter dropdown
+│   ├── LatestUpdates.tsx   # Recent uploads browser
+│   ├── SettingsSidebar.tsx # Auth management sidebar
+│   └── ui/                 # Shared UI components
+├── utils/
+│   └── torrentUtils.ts     # Tag parsing + result types
+├── App.tsx                 # Root component
+└── src/main.tsx            # Entry point
 ```
 
-## 🔍 How It Works
+## API Endpoints
 
-### Backend Scraping Process
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/search?q=...&trackers=...` | GET | Search across trackers |
+| `/api/auth` | POST | Login to a tracker |
+| `/api/auth-status` | GET | Check login status |
+| `/api/logout/:service` | POST | Logout from a tracker |
+| `/api/magnet/:id` | GET | Get magnet link |
+| `/api/download/:id` | GET | Download .torrent or fix |
+| `/api/details/:id` | GET | Get full result details |
+| `/api/latest/:tracker` | GET | Get latest uploads |
+| `/api/proxy-image?url=...` | GET | Proxy external images |
+| `/api/health` | GET | Server health check |
 
-1. **DuckDuckGo Search**: Uses the dork query `intitle:"${query}" site:rutracker.org` to find relevant RuTracker pages
-2. **Page Scraping**: Extracts detailed information from each RuTracker page:
-   - Magnet links
-   - File sizes
-   - Upload dates
-   - Seeders/leechers count
-   - Categories
-3. **API Response**: Returns structured data to the frontend
+## Tech Stack
 
-### Frontend Features
+**Frontend:** React 18, TypeScript, Vite, Tailwind CSS v4, Motion, shadcn/ui, Lucide icons
 
-- ✨ Smooth animations with Motion (Framer Motion)
-- 🌙 Dark theme with grayish color scheme
-- 🔍 Real-time search with debouncing
-- 📱 Responsive design
-- 🎯 Fixed-size results container with faded scroll
-- 🔄 Animated search field positioning
-- 📊 Multiple sorting options
-- 🧲 Working magnet links and RuTracker page links
+**Backend:** Express.js, Cheerio (HTML parsing), tough-cookie (session management), Axios
 
-## ⚠️ Important Notes
+## Legal
 
-### Legal Disclaimer
-This tool is for educational purposes only. Users are responsible for complying with their local laws and the terms of service of the websites being accessed.
-
-### Rate Limiting
-The backend includes delays between requests to avoid overwhelming the target websites. Search results may take 10-30 seconds depending on the number of results found.
-
-### Error Handling
-- If the backend server isn't running, you'll see an error message
-- Network timeouts are handled gracefully
-- Invalid search queries show appropriate error messages
-
-## 🔧 Technology Stack
-
-**Frontend:**
-- **React 18** - UI framework
-- **TypeScript** - Type safety
-- **Vite** - Build tool and dev server
-- **Tailwind CSS v4** - Styling
-- **Motion** - Animations
-- **Lucide React** - Icons
-- **Axios** - HTTP client
-
-**Backend:**
-- **Express.js** - Web server
-- **Cheerio** - HTML parsing/scraping
-- **Axios** - HTTP requests
-- **CORS** - Cross-origin resource sharing
-
-## 🚀 Production Deployment
-
-### Frontend
-1. Build the frontend:
-   ```bash
-   npm run build
-   ```
-2. Deploy the `dist` folder to any static hosting service (Vercel, Netlify, etc.)
-
-### Backend
-1. Deploy the Express server to a platform like:
-   - Heroku
-   - Railway
-   - DigitalOcean
-   - AWS EC2
-
-2. Update the frontend API URL in `components/TorrentSearch.tsx`:
-   ```javascript
-   const response = await axios.get(`https://your-backend-url.com/api/search`, {
-   ```
-
-## 🔧 Configuration
-
-### Backend Port
-Change the backend port in `server/server.js`:
-```javascript
-const PORT = process.env.PORT || 3001;
-```
-
-### API Timeout
-Adjust search timeout in `components/TorrentSearch.tsx`:
-```javascript
-timeout: 30000 // 30 seconds
-```
-
-### Rate Limiting
-Modify delays in `server/server.js`:
-```javascript
-await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
-```
-
-## 🐛 Troubleshooting
-
-**"Backend server is not running" error:**
-- Make sure you've run `npm run dev` or `npm run dev:backend`
-- Check that port 3001 is not being used by another application
-
-**Slow search results:**
-- This is normal due to web scraping delays
-- Results typically take 10-30 seconds
-
-**No results found:**
-- Try different search terms
-- RuTracker may be blocking requests (try again later)
-- Check your internet connection
-
-## 📝 License
-
-This project is for educational/demonstration purposes only.
+This project is for educational purposes only. You are responsible for complying with applicable laws and the terms of service of any sites you interact with.
